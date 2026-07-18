@@ -104,6 +104,7 @@ class ShopifyConnector(Connector):
                     "total_discounts": float(o.get("total_discounts", 0) or 0),
                     "total_refunded": _refunded_amount(o),
                     "is_cancelled": bool(o.get("cancelled_at")),
+                    "financial_status": o.get("financial_status"),
                     "fulfillment": _norm_fulfillment(o.get("fulfillment_status")),
                 }
             )
@@ -182,19 +183,18 @@ def _next_link(link_header: str | None) -> str | None:  # pragma: no cover
 
 
 def _sample_orders() -> list[dict[str, Any]]:
-    """Deterministic sample resembling a small Shopify export."""
+    """Deterministic sample resembling a small Shopify export (with payment state)."""
     return [
-        {"id": 1, "total_price": "2499.00", "total_discounts": "100.00",
-         "total_refunded": "0", "cancelled_at": None, "fulfillment_status": "fulfilled"},
-        {"id": 2, "total_price": "3999.00", "total_discounts": "0",
-         "total_refunded": "0", "cancelled_at": None, "fulfillment_status": "fulfilled"},
-        {"id": 3, "total_price": "1799.00", "total_discounts": "200.00",
-         "total_refunded": "1799.00", "cancelled_at": None, "fulfillment_status": "fulfilled"},
-        {"id": 4, "total_price": "2999.00", "total_discounts": "0",
-         "total_refunded": "0", "cancelled_at": None, "fulfillment_status": "partial"},
-        {"id": 5, "total_price": "4599.00", "total_discounts": "0",
-         "total_refunded": "0", "cancelled_at": "2026-07-03T10:00:00Z",
-         "fulfillment_status": None},
-        {"id": 6, "total_price": "1299.00", "total_discounts": "50.00",
-         "total_refunded": "0", "cancelled_at": None, "fulfillment_status": None},
+        {"id": 1, "total_price": "2499.00", "total_discounts": "100.00", "total_refunded": "0",
+         "cancelled_at": None, "financial_status": "paid", "fulfillment_status": "fulfilled"},
+        {"id": 2, "total_price": "3999.00", "total_discounts": "0", "total_refunded": "0",
+         "cancelled_at": None, "financial_status": "paid", "fulfillment_status": "fulfilled"},
+        {"id": 3, "total_price": "1799.00", "total_discounts": "200.00", "total_refunded": "500.00",
+         "cancelled_at": None, "financial_status": "partially_refunded", "fulfillment_status": "fulfilled"},
+        {"id": 4, "total_price": "2999.00", "total_discounts": "0", "total_refunded": "0",
+         "cancelled_at": None, "financial_status": "pending", "fulfillment_status": "partial"},
+        {"id": 5, "total_price": "4599.00", "total_discounts": "0", "total_refunded": "0",
+         "cancelled_at": "2026-07-03T10:00:00Z", "financial_status": "voided", "fulfillment_status": None},
+        {"id": 6, "total_price": "1299.00", "total_discounts": "50.00", "total_refunded": "0",
+         "cancelled_at": None, "financial_status": "pending", "fulfillment_status": None},
     ]

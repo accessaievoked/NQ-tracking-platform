@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.compute.money_flow import AdSpend, aggregate_orders, compute_money_flow
 from app.config import settings
+from app.connectors.meta_ads import MetaAdsConnector
 from app.connectors.shopify import ShopifyConnector, exchange_client_credentials
 from app.models import (
     Brand,
@@ -138,8 +139,7 @@ def generate_money_flow_report(
 
         orders = aggregate_orders(connector.normalize(payload))
 
-        # TODO: replace sample ad spend with Meta/Google connector output.
-        ads = _sample_ad_spend()
+        ads = get_meta_ad_spend(db, brand.id, period_start, period_end)
 
         metrics = compute_money_flow(orders, ads, gst_rate=settings.default_gst_rate)
         narrative = generate_narrative(brand.name, period_label, metrics)
@@ -156,10 +156,32 @@ def generate_money_flow_report(
     return report
 
 
-def _sample_ad_spend() -> AdSpend:
-    """Placeholder ad-spend until Meta/Google connectors are wired."""
-    return AdSpend(
-        reported_spend=8000.0,
-        reported_revenue=27000.0,
-        by_platform={"meta_ads": 5000.0, "google_ads": 3000.0},
+def get_meta_ad_spend(
+    db: Session, brand_id: str, period_start: datetime, period_end: datetime
+) -> AdSpend:
+    """Return real Meta ad spend for the period, or an unconnected AdSpend.
+
+    Unconnected -> Money Flow withholds ROAS instead of printing a bogus number.
+    """
+    integ = (
+        db.query(Integration)
+        .filter(
+            Integration.brand_id == brand_id,
+            Integration.provider == IntegrationProvider.meta_ads,
+        )
+        .first()
     )
+    if not integ or not integ.encrypted_tokens:
+        return AdSpend(connected=False)
+
+    creds = json.loads(decrypt(integ.encrypted_tokens))
+    token = creds.get("access_token")
+    if not token:
+        return AdSpend(connected=False)
+
+    connector = MetaAdsConnector(credentials={"access_token": token}, config=integ.config or {})
+    try:
+        payload = connector.fetch(period_start, period_end)
+        return connector.to_ad_spend(payload)
+    except Exception:
+        return AdSpend(connected=False)
