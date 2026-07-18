@@ -1,0 +1,25 @@
+# --- Web framework ---
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic[email]==2.10.4
+pydantic-settings==2.7.1
+email-validator==2.2.0
+
+# --- Database ---
+SQLAlchemy==2.0.36
+psycopg[binary]==3.2.3
+alembic==1.14.0
+
+# --- Auth / crypto ---
+itsdangerous==2.2.0
+cryptography==44.0.0
+
+# --- Connectors / HTTP ---
+httpx==0.28.1
+
+# --- LLM ---
+anthropic==0.42.0
+
+# --- Dev / test ---
+pytest==8.3.4  # httpx (above) also powers Starlette's TestClient
