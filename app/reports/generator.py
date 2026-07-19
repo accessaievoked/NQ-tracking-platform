@@ -149,3 +149,110 @@ def generate_tracking_narrative(brand_name: str, period: str, m: dict) -> str:
         "data as the source of truth for revenue, and treat GA4 as directional traffic insight.",
     ]
     return "\n".join(lines)
+
+
+# ==========================================================================
+# Generic report narrator (adverti-style report types)
+#
+# Any report registered in app.reports.specs is driven through here. The model
+# gets the report's system prompt + a PRE-COMPUTED facts JSON and writes prose.
+# With no ANTHROPIC_API_KEY, a deterministic template renders the facts under
+# each spec section so the pipeline is fully testable offline.
+# ==========================================================================
+
+def build_report_prompt(brand_name: str, period: str, facts: dict[str, Any]) -> str:
+    return (
+        f"Brand: {brand_name}\nPeriod: {period}\n\n"
+        f"PRE-COMPUTED FACTS (do not change any number):\n"
+        f"```json\n{json.dumps(facts, indent=2, default=str)}\n```\n\n"
+        "Write the report now, using the exact sections defined in your instructions."
+    )
+
+
+def generate_report_narrative(
+    report_type, brand_name: str, period: str, facts: dict[str, Any]
+) -> str:
+    """Render any spec-backed report. Routes to Claude when a key is set,
+    else falls back to a deterministic template built from the same spec."""
+    from app.reports.specs import get_spec  # local import avoids a cycle
+
+    spec = get_spec(report_type)
+    if not settings.anthropic_api_key:
+        return _fallback_report(spec, brand_name, period, facts)
+    try:
+        return _claude_report(spec, brand_name, period, facts)
+    except Exception as exc:  # pragma: no cover - network dependent
+        return (
+            _fallback_report(spec, brand_name, period, facts)
+            + f"\n\n_(LLM narrative unavailable: {exc}; showing computed summary.)_"
+        )
+
+
+def _claude_report(spec, brand_name: str, period: str, facts: dict[str, Any]) -> str:  # pragma: no cover
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    msg = client.messages.create(
+        model=settings.anthropic_model,
+        max_tokens=2500,
+        system=spec.system_prompt(),
+        messages=[{"role": "user", "content": build_report_prompt(brand_name, period, facts)}],
+    )
+    return "".join(block.text for block in msg.content if block.type == "text")
+
+
+def _fallback_report(spec, brand_name: str, period: str, facts: dict[str, Any]) -> str:
+    """Deterministic, offline rendering: one H2 per spec section, filled from
+    ``facts`` when a matching key exists. Facts keys are matched to sections by
+    a slugified section name (e.g. 'METRICS BLOCK' -> 'metrics_block').
+
+    This is intentionally simple — it exists so the whole pipeline runs and is
+    testable without an API key; Claude produces the real prose when enabled.
+    """
+    lines = [
+        f"# {brand_name} — {spec.title}",
+        f"_{period}_",
+        "",
+        "> _Template preview (no ANTHROPIC_API_KEY set). Set the key to switch "
+        "on Claude-written prose. All figures below come straight from the "
+        "computed facts and are never altered._",
+    ]
+    for name, instruction in spec.sections:
+        lines += ["", f"## {name}"]
+        value = facts.get(_slug(name))
+        if value is None:
+            lines.append(f"_{instruction}_ — _(no `{_slug(name)}` in facts)_")
+        else:
+            lines.append(_render_fact(value))
+    return "\n".join(lines)
+
+
+def _slug(name: str) -> str:
+    out = []
+    for ch in name.lower():
+        out.append(ch if ch.isalnum() else "_")
+    slug = "".join(out)
+    while "__" in slug:
+        slug = slug.replace("__", "_")
+    return slug.strip("_")
+
+
+def _render_fact(value: Any) -> str:
+    """Render a facts value as readable Markdown: strings as-is, list-of-dicts
+    as a table, other lists as bullets, scalars inline."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        return "\n".join(f"- **{k}:** {v}" for k, v in value.items())
+    if isinstance(value, list):
+        if value and all(isinstance(row, dict) for row in value):
+            cols = list(dict.fromkeys(k for row in value for k in row))  # first-seen order
+            head = "| " + " | ".join(cols) + " |"
+            sep = "| " + " | ".join("---" for _ in cols) + " |"
+            body = [
+                "| " + " | ".join(str(row.get(c, "")) for c in cols) + " |"
+                for row in value
+            ]
+            return "\n".join([head, sep, *body])
+        return "\n".join(f"- {item}" for item in value)
+    return str(value)

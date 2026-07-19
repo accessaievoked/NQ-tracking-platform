@@ -7,8 +7,9 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.deps import get_owned_brand
 from app.models import Brand, Report, ReportType
+from app.reports.specs import has_spec
 from app.schemas import ReportCreate, ReportDetail, ReportSummary
-from app.services import generate_money_flow_report
+from app.services import generate_ai_report, generate_money_flow_report
 
 router = APIRouter(prefix="/api/brands/{brand_id}/reports", tags=["reports"])
 
@@ -29,12 +30,27 @@ def create_report(
     brand: Brand = Depends(get_owned_brand),
     db: Session = Depends(get_db),
 ):
-    if body.type != ReportType.money_flow:
-        raise HTTPException(
-            status.HTTP_501_NOT_IMPLEMENTED,
-            f"Report type '{body.type.value}' not implemented yet",
+    # money_flow computes its own metrics from connected data.
+    if body.type == ReportType.money_flow:
+        return generate_money_flow_report(db, brand, body.period_start, body.period_end)
+
+    # Spec-backed report types are narrated from a supplied facts bundle until
+    # each grows a live compute path.
+    if has_spec(body.type):
+        if not body.facts:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Report type '{body.type.value}' requires a 'facts' bundle "
+                "(no live compute path yet).",
+            )
+        return generate_ai_report(
+            db, brand, body.type, body.period_start, body.period_end, body.facts
         )
-    return generate_money_flow_report(db, brand, body.period_start, body.period_end)
+
+    raise HTTPException(
+        status.HTTP_501_NOT_IMPLEMENTED,
+        f"Report type '{body.type.value}' not implemented yet",
+    )
 
 
 @router.get("/{report_id}", response_model=ReportDetail)

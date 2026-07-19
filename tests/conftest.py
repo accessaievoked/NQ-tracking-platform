@@ -11,8 +11,18 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.config import settings
 from app.db import Base, get_db
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def _offline_llm(monkeypatch):
+    """Force the whole suite offline: with a real ANTHROPIC_API_KEY in the
+    environment, report-pipeline tests would otherwise make live Claude calls
+    (slow, flaky, and costly). Clearing the key routes every report through the
+    deterministic template instead. Restored automatically after each test."""
+    monkeypatch.setattr(settings, "anthropic_api_key", "", raising=False)
 
 
 @pytest.fixture()

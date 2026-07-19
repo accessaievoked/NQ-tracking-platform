@@ -69,6 +69,10 @@ class ReportCreate(BaseModel):
     type: ReportType = ReportType.money_flow
     period_start: datetime
     period_end: datetime
+    # For spec-backed report types that don't yet have a live compute path,
+    # the caller passes a PRE-COMPUTED facts bundle to be narrated. Ignored for
+    # money_flow, which computes its own metrics from connected data.
+    facts: dict | None = None
 
 
 class ReportSummary(ORMModel):

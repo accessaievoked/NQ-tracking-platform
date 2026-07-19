@@ -64,10 +64,40 @@ class IntegrationStatus(str, enum.Enum):
 
 
 class ReportType(str, enum.Enum):
+        # --- Legacy / generic (kept for back-compat) ---
     money_flow = "money_flow"
     account_audit = "account_audit"
     product_pl = "product_pl"
     performance = "performance"
+
+    # --- Alerts (event-triggered) ---
+    cpa_spike_alert = "cpa_spike_alert"
+    creative_fatigue_alert = "creative_fatigue_alert"
+    daily_spend_alert = "daily_spend_alert"
+    wasted_spend_alert = "wasted_spend_alert"
+
+    # --- Weekly ---
+    cod_rto_weekly = "cod_rto_weekly"
+    creative_health_weekly = "creative_health_weekly"
+    money_flow_weekly = "money_flow_weekly"
+    platform_compare_weekly = "platform_compare_weekly"
+    weekly_action_plan = "weekly_action_plan"
+
+    # --- Monthly ---
+    monthly_customer_quality = "monthly_customer_quality"
+    monthly_money_flow = "monthly_money_flow"
+    monthly_performance = "monthly_performance"
+    monthly_product_pl = "monthly_product_pl"
+
+    # --- Deep-dive / strategy (adverti-style) ---
+    # account_audit + product_pl (legacy, above) are the Full Account Audit
+    # health-score and Product P&L reports respectively.
+    meta_ads_kill_strategy = "meta_ads_kill_strategy"
+    campaign_attribution = "campaign_attribution"
+    ad_strategy = "ad_strategy"
+    true_roas_money_flow = "true_roas_money_flow"
+    campaign_revamp = "campaign_revamp"
+    meta_ads_performance = "meta_ads_performance"
 
 
 class ReportStatus(str, enum.Enum):

@@ -27,7 +27,12 @@ from app.models import (
     ReportStatus,
     ReportType,
 )
-from app.reports.generator import generate_narrative, generate_tracking_narrative
+from app.reports.generator import (
+    generate_narrative,
+    generate_report_narrative,
+    generate_tracking_narrative,
+)
+from app.reports.specs import get_spec
 from app.security import decrypt, encrypt
 
 # Refresh a client-credentials token this many seconds before it actually expires.
@@ -152,6 +157,48 @@ def generate_money_flow_report(
         narrative = generate_narrative(brand.name, period_label, metrics)
 
         report.computed_metrics = metrics
+        report.narrative_md = narrative
+        report.status = ReportStatus.ready
+    except Exception as exc:  # keep the row, record the failure
+        report.status = ReportStatus.failed
+        report.error = str(exc)
+
+    db.commit()
+    db.refresh(report)
+    return report
+
+
+def generate_ai_report(
+    db: Session,
+    brand: Brand,
+    report_type: ReportType,
+    period_start: datetime,
+    period_end: datetime,
+    facts: dict,
+) -> Report:
+    """Generic pipeline for spec-backed report types.
+
+    The caller supplies a PRE-COMPUTED ``facts`` bundle (deterministic numbers);
+    this narrates it via the report's registered spec and persists the row. The
+    facts are stored verbatim in ``computed_metrics`` so a report can be
+    re-narrated later without recomputing.
+    """
+    spec = get_spec(report_type)  # raises for unknown types -> surfaced as 400 by API
+    period_label = f"{period_start:%b %d} - {period_end:%b %d, %Y}"
+    report = Report(
+        brand_id=brand.id,
+        type=report_type,
+        status=ReportStatus.generating,
+        title=f"{brand.name} - {spec.title} | {period_label}",
+        period_start=period_start,
+        period_end=period_end,
+    )
+    db.add(report)
+    db.flush()
+
+    try:
+        narrative = generate_report_narrative(report_type, brand.name, period_label, facts)
+        report.computed_metrics = facts
         report.narrative_md = narrative
         report.status = ReportStatus.ready
     except Exception as exc:  # keep the row, record the failure
