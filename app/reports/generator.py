@@ -112,3 +112,40 @@ def _fallback_narrative(brand_name: str, period: str, metrics: dict[str, Any]) -
             f"collected.{pend_txt} Connect Meta/Google ad spend to unlock real ROAS."
         )
     return "\n".join(lines)
+
+
+def generate_tracking_narrative(brand_name: str, period: str, m: dict) -> str:
+    """Template narrative for the GA4-vs-Shopify tracking-reality report."""
+    cur = m.get("currency", "INR")
+    sh = m["shopify"]
+    ga = m["ga4"]
+    gap = m["gap"]
+    conv = m["conversion"]
+
+    lines = [
+        f"# {brand_name} — Tracking Reality (GA4 vs Shopify)",
+        f"_{period}_",
+        "",
+        "## The headline",
+        f"GA4 tracked **{ga['purchases']}** purchases, but Shopify actually recorded "
+        f"**{sh['orders']}** orders — GA4 is **{gap['verdict']}**, capturing only "
+        f"**{gap['order_capture_rate_pct']}%** of real orders "
+        f"(**{gap['untracked_orders']}** orders, {gap['untracked_orders_pct']}%, went untracked).",
+        "",
+        "## GA4 vs reality",
+        f"| Metric | GA4 (dashboard) | Shopify (reality) |",
+        "| --- | ---: | ---: |",
+        f"| Purchases / orders | {ga['purchases']} | {sh['orders']} |",
+        f"| Revenue ({cur}) | {ga['purchase_revenue']:,.0f} | {sh['gross_sales']:,.0f} (gross) / "
+        f"{sh['collected']:,.0f} (collected) |",
+        f"| Conversion rate | {conv['ga4_reported_cvr_pct']}% | {conv['true_cvr_pct']}% (true) |",
+        "",
+        "## What this means",
+        f"The client's GA4 dashboard **understates sales**: it only sees "
+        f"{gap['order_capture_rate_pct']}% of orders and {gap['revenue_capture_rate_pct']}% of "
+        f"gross revenue. Optimising ad campaigns to GA4 conversions therefore undercounts true "
+        f"performance — real conversion rate is **{conv['true_cvr_pct']}%** vs GA4's reported "
+        f"**{conv['ga4_reported_cvr_pct']}%** across {m['sessions']:,} sessions. Use Shopify order "
+        "data as the source of truth for revenue, and treat GA4 as directional traffic insight.",
+    ]
+    return "\n".join(lines)

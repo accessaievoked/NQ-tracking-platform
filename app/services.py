@@ -8,7 +8,14 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.compute.money_flow import AdSpend, aggregate_orders, compute_money_flow
+from app.compute.tracking import compute_tracking_reality
 from app.config import settings
+from app.connectors.google_auth import (
+    ANALYTICS_READONLY,
+    mint_access_token,
+    refresh_access_token,
+)
+from app.connectors.ga4 import GA4Connector
 from app.connectors.meta_ads import MetaAdsConnector
 from app.connectors.shopify import ShopifyConnector, exchange_client_credentials
 from app.models import (
@@ -20,7 +27,7 @@ from app.models import (
     ReportStatus,
     ReportType,
 )
-from app.reports.generator import generate_narrative
+from app.reports.generator import generate_narrative, generate_tracking_narrative
 from app.security import decrypt, encrypt
 
 # Refresh a client-credentials token this many seconds before it actually expires.
@@ -185,3 +192,79 @@ def get_meta_ad_spend(
         return connector.to_ad_spend(payload)
     except Exception:
         return AdSpend(connected=False)
+
+
+def get_valid_ga4_token(db: Session, integ: Integration | None) -> str | None:
+    """Return a usable GA4 access token.
+
+    Service-account creds are minted into a short-lived token and cached (and
+    re-minted automatically on expiry) — no human refresh. A raw access_token
+    (e.g. from the OAuth Playground) is served directly as a fallback.
+    """
+    if not integ or not integ.encrypted_tokens:
+        return None
+    creds = json.loads(decrypt(integ.encrypted_tokens))
+
+    sa = creds.get("service_account")
+    if sa:
+        now = time.time()
+        cache = creds.get("_cache") or {}
+        if cache.get("token") and cache.get("expires_at", 0) > now + TOKEN_REFRESH_BUFFER:
+            return cache["token"]
+        token, expires_in = mint_access_token(sa, ANALYTICS_READONLY)
+        creds["_cache"] = {"token": token, "expires_at": now + expires_in}
+        integ.encrypted_tokens = encrypt(json.dumps(creds))
+        db.commit()
+        return token
+
+    oauth = creds.get("oauth")
+    if oauth:
+        now = time.time()
+        cache = creds.get("_cache") or {}
+        if cache.get("token") and cache.get("expires_at", 0) > now + TOKEN_REFRESH_BUFFER:
+            return cache["token"]
+        token, expires_in = refresh_access_token(
+            oauth["client_id"], oauth["client_secret"], oauth["refresh_token"]
+        )
+        creds["_cache"] = {"token": token, "expires_at": now + expires_in}
+        integ.encrypted_tokens = encrypt(json.dumps(creds))
+        db.commit()
+        return token
+
+    return creds.get("access_token")
+
+
+def get_ga4_summary(
+    db: Session, brand_id: str, period_start: datetime, period_end: datetime
+) -> dict | None:
+    """Return GA4 period totals for a brand, or None if GA4 isn't connected."""
+    integ = (
+        db.query(Integration)
+        .filter(
+            Integration.brand_id == brand_id,
+            Integration.provider == IntegrationProvider.ga4,
+        )
+        .first()
+    )
+    token = get_valid_ga4_token(db, integ)
+    if not integ or not token:
+        return None
+    connector = GA4Connector(credentials={"access_token": token}, config=integ.config or {})
+    return connector.summarize(connector.fetch(period_start, period_end))
+
+
+def compute_tracking(
+    db: Session, brand: Brand, period_start: datetime, period_end: datetime
+) -> tuple[dict, str]:
+    """Reconcile GA4 tracked purchases vs Shopify real orders. Returns (metrics, narrative)."""
+    connector = _shopify_connector(db, brand.id)
+    orders = aggregate_orders(connector.normalize(connector.fetch(period_start, period_end)))
+
+    ga4 = get_ga4_summary(db, brand.id, period_start, period_end)
+    if ga4 is None:
+        raise RuntimeError("GA4 is not connected for this brand")
+
+    metrics = compute_tracking_reality(orders, ga4)
+    label = f"{period_start:%b %d} - {period_end:%b %d, %Y}"
+    narrative = generate_tracking_narrative(brand.name, label, metrics)
+    return metrics, narrative
