@@ -48,7 +48,9 @@ def generate_narrative(brand_name: str, period: str, metrics: dict[str, Any]) ->
 def _claude_narrative(brand_name: str, period: str, metrics: dict[str, Any]) -> str:  # pragma: no cover
     import anthropic
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    # Fail fast: a bad key or network block should error in ~30s, not hang on
+    # long retry backoff. The caller falls back to the deterministic template.
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=30.0, max_retries=1)
     msg = client.messages.create(
         model=settings.anthropic_model,
         max_tokens=2000,
@@ -191,7 +193,9 @@ def generate_report_narrative(
 def _claude_report(spec, brand_name: str, period: str, facts: dict[str, Any]) -> str:  # pragma: no cover
     import anthropic
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    # Fail fast: a bad key or network block should error in ~30s, not hang on
+    # long retry backoff. The caller falls back to the deterministic template.
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=30.0, max_retries=1)
     msg = client.messages.create(
         model=settings.anthropic_model,
         max_tokens=2500,
