@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NQ Tracking — Connections</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0a0a0f; color: #e6e6ef;
+         font: 15px/1.5 -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .muted { color: #8b8b9e; font-size: 13px; }
+  .badge { display:inline-block; font-size:11px; font-weight:700; letter-spacing:.05em;
+           color:#fff; background:#7c3aed; padding:4px 11px; border-radius:999px; }
+  input, button { font: inherit; }
+  input { background:#14141f; border:1px solid #262636; color:#e6e6ef; border-radius:8px;
+          padding:10px 12px; width:100%; }
+  input::placeholder { color:#6b6b80; }
+  button { background:#7c3aed; color:#fff; border:none; border-radius:8px; padding:10px 16px;
+           font-weight:600; cursor:pointer; }
+  button.secondary { background:#1c1c2a; border:1px solid #2a2a3c; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .row { display:flex; gap:10px; align-items:center; }
+  .card { background:#111019; border:1px solid #201f30; border-radius:14px; padding:18px; }
+  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:18px; }
+  .conn { position:relative; }
+  .conn .ic { width:40px; height:40px; border-radius:10px; display:flex; align-items:center;
+              justify-content:center; font-weight:800; font-size:18px; margin-bottom:12px; }
+  .conn .name { font-weight:700; }
+  .status { font-size:12.5px; margin-top:4px; }
+  .status.ok { color:#34d399; } .status.no { color:#8b8b9e; } .status.err { color:#f87171; }
+  .conn .act { margin-top:12px; }
+  .soon { opacity:.5; }
+  .hidden { display:none; }
+  .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  .field { margin:10px 0; }
+  .field label { display:block; font-size:12px; color:#9a9ab0; margin-bottom:5px; }
+  #toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+           background:#14141f; border:1px solid #2a2a3c; padding:12px 18px; border-radius:10px;
+           font-size:13.5px; opacity:0; transition:opacity .2s; pointer-events:none; }
+  #toast.show { opacity:1; }
+  dialog { background:#111019; color:#e6e6ef; border:1px solid #2a2a3c; border-radius:14px;
+           width:min(440px,92vw); padding:22px; }
+  dialog::backdrop { background:rgba(0,0,0,.6); }
+  a { color:#c4b5fd; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- LOGIN -->
+  <div id="login" class="card" style="max-width:420px;margin:60px auto;">
+    <span class="badge">NQ TRACKING</span>
+    <h1 style="margin-top:14px;">Sign in</h1>
+    <p class="muted">Enter your email to get a login link (dev mode logs you in directly).</p>
+    <div class="field"><input id="email" type="email" placeholder="you@brand.com" /></div>
+    <button id="loginBtn" style="width:100%;">Continue</button>
+    <p id="loginErr" class="status err"></p>
+  </div>
+
+  <!-- APP -->
+  <div id="app" class="hidden">
+    <div class="topbar">
+      <div><span class="badge" id="brandBadge">BRAND</span></div>
+      <div class="row">
+        <select id="brandSel" style="background:#14141f;color:#e6e6ef;border:1px solid #262636;border-radius:8px;padding:8px;"></select>
+        <button class="secondary" id="newBrandBtn">+ Brand</button>
+        <button class="secondary" id="logoutBtn">Log out</button>
+      </div>
+    </div>
+    <h1>Connections</h1>
+    <p class="muted">Connect your data sources by pasting each provider's token. Nothing is
+      stored in plain text — credentials are encrypted on the server.</p>
+    <div id="grid" class="grid"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<dialog id="connectDlg">
+  <h1 id="dlgTitle" style="font-size:18px;">Connect</h1>
+  <p class="muted" id="dlgHelp"></p>
+  <div id="dlgFields"></div>
+  <div class="row" style="justify-content:flex-end;margin-top:16px;">
+    <button class="secondary" id="dlgCancel">Cancel</button>
+    <button id="dlgSave">Connect</button>
+  </div>
+  <p id="dlgErr" class="status err"></p>
+</dialog>
+
+<script>
+const API = "";                 // same origin as this page
+let token = localStorage.getItem("nq_token") || "";
+let brandId = localStorage.getItem("nq_brand") || "";
+
+// Provider definitions: which fields each needs, and how they map to config/credentials.
+const PROVIDERS = {
+  shopify:   { name:"Shopify Store", icon:"S", bg:"#95bf47", help:"Dev Dashboard app credentials, or a legacy access token.",
+    fields:[ {k:"config.shop_domain", label:"Shop domain (e.g. store.myshopify.com)"},
+             {k:"credentials.client_id", label:"API key / Client ID"},
+             {k:"credentials.client_secret", label:"API secret / Client secret", secret:true} ] },
+  meta_ads:  { name:"Meta Ads", icon:"f", bg:"#1877f2", help:"Ad account id + a Marketing API access token.",
+    fields:[ {k:"config.ad_account_id", label:"Ad account ID (act_...)"},
+             {k:"credentials.access_token", label:"Access token", secret:true} ] },
+  ga4:       { name:"Google Analytics 4", icon:"G", bg:"#e8710a", help:"GA4 property id + an access token.",
+    fields:[ {k:"config.property_id", label:"Property ID"},
+             {k:"credentials.access_token", label:"Access token", secret:true} ] },
+  clarity:   { name:"Microsoft Clarity", icon:"C", bg:"#4a4af0", help:"Data Export API token (Settings → Data Export).",
+    fields:[ {k:"credentials.token", label:"Data Export API token", secret:true} ] },
+};
+const COMING = { google_ads:"Google Ads", search_console:"Search Console" };
+
+const $ = s => document.querySelector(s);
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2200); }
+async function api(path, opts={}){
+  const h = Object.assign({"Content-Type":"application/json"}, opts.headers||{});
+  if(token) h["Authorization"]="Bearer "+token;
+  const r = await fetch(API+path, Object.assign({}, opts, {headers:h}));
+  if(!r.ok){ let d; try{d=await r.json()}catch(e){d={}} throw new Error(d.detail||("HTTP "+r.status)); }
+  return r.status===204 ? null : r.json();
+}
+
+// ---- Auth ----
+$("#loginBtn").onclick = async () => {
+  const email = $("#email").value.trim();
+  if(!email) return;
+  $("#loginErr").textContent=""; $("#loginBtn").disabled=true;
+  try {
+    const issued = await api("/api/auth/magic-link", {method:"POST", body:JSON.stringify({email})});
+    if(!issued.dev_login_url) throw new Error("No dev login URL (is APP_ENV=local?).");
+    const t = new URL(issued.dev_login_url, location.origin).searchParams.get("token");
+    const sess = await api("/api/auth/verify?token="+encodeURIComponent(t));
+    token = sess.token; localStorage.setItem("nq_token", token);
+    await boot();
+  } catch(e){ $("#loginErr").textContent = e.message; }
+  finally { $("#loginBtn").disabled=false; }
+};
+$("#logoutBtn").onclick = () => { localStorage.clear(); location.reload(); };
+
+// ---- Brands ----
+async function loadBrands(){
+  let brands = await api("/api/brands");
+  if(brands.length === 0){
+    const name = prompt("Name your first brand:", "My Brand");
+    if(name){ await api("/api/brands", {method:"POST", body:JSON.stringify({name})}); brands = await api("/api/brands"); }
+  }
+  const sel = $("#brandSel"); sel.innerHTML="";
+  brands.forEach(b => { const o=document.createElement("option"); o.value=b.id; o.textContent=b.name; sel.appendChild(o); });
+  if(!brandId || !brands.find(b=>b.id===brandId)) brandId = brands[0] ? brands[0].id : "";
+  sel.value = brandId; localStorage.setItem("nq_brand", brandId);
+  const cur = brands.find(b=>b.id===brandId);
+  $("#brandBadge").textContent = cur ? cur.name.toUpperCase() : "BRAND";
+  sel.onchange = () => { brandId=sel.value; localStorage.setItem("nq_brand",brandId);
+    $("#brandBadge").textContent = sel.options[sel.selectedIndex].text.toUpperCase(); renderGrid(); };
+}
+$("#newBrandBtn").onclick = async () => {
+  const name = prompt("New brand name:"); if(!name) return;
+  await api("/api/brands", {method:"POST", body:JSON.stringify({name})});
+  await loadBrands(); renderGrid();
+};
+
+// ---- Connections grid ----
+async function renderGrid(){
+  const grid = $("#grid"); grid.innerHTML="";
+  let integrations = [];
+  try { integrations = await api(`/api/brands/${brandId}/integrations`); } catch(e){}
+  const byProv = {}; integrations.forEach(i => byProv[i.provider]=i);
+
+  for(const [prov, def] of Object.entries(PROVIDERS)){
+    const st = byProv[prov];
+    const connected = st && st.status === "connected";
+    const errored = st && st.status === "error";
+    const card = document.createElement("div"); card.className="card conn";
+    card.innerHTML = `
+      <div class="ic" style="background:${def.bg}">${def.icon}</div>
+      <div class="name">${def.name}</div>
+      <div class="status ${connected?'ok':errored?'err':'no'}">${connected?'✓ Connected':errored?'⚠ '+(st.last_error||'Error'):'Not set up'}</div>
+      <div class="act">
+        <button data-prov="${prov}" class="connBtn ${connected?'secondary':''}">${connected?'Reconnect':'Connect'}</button>
+        ${connected?`<button data-prov="${prov}" class="secondary discBtn">Disconnect</button>`:''}
+      </div>`;
+    grid.appendChild(card);
+  }
+  for(const [prov, name] of Object.entries(COMING)){
+    const card = document.createElement("div"); card.className="card conn soon";
+    card.innerHTML = `<div class="ic" style="background:#333">·</div><div class="name">${name}</div><div class="status no">Coming soon</div>`;
+    grid.appendChild(card);
+  }
+  grid.querySelectorAll(".connBtn").forEach(b => b.onclick = () => openConnect(b.dataset.prov));
+  grid.querySelectorAll(".discBtn").forEach(b => b.onclick = async () => {
+    await api(`/api/brands/${brandId}/integrations/${b.dataset.prov}/disconnect`, {method:"POST", body:"{}"});
+    toast("Disconnected"); renderGrid();
+  });
+}
+
+// ---- Connect dialog ----
+let activeProv = null;
+function openConnect(prov){
+  activeProv = prov; const def = PROVIDERS[prov];
+  $("#dlgTitle").textContent = "Connect " + def.name;
+  $("#dlgHelp").textContent = def.help || "";
+  $("#dlgErr").textContent = "";
+  $("#dlgFields").innerHTML = def.fields.map(f =>
+    `<div class="field"><label>${f.label}</label><input data-k="${f.k}" type="${f.secret?'password':'text'}" placeholder="${f.label}"/></div>`).join("");
+  $("#connectDlg").showModal();
+}
+$("#dlgCancel").onclick = () => $("#connectDlg").close();
+$("#dlgSave").onclick = async () => {
+  const config = {}, credentials = {};
+  $("#dlgFields").querySelectorAll("input").forEach(inp => {
+    const [grp, key] = inp.dataset.k.split(".");
+    const v = inp.value.trim(); if(!v) return;
+    (grp==="config"?config:credentials)[key] = v;
+  });
+  $("#dlgSave").disabled = true; $("#dlgErr").textContent="";
+  try {
+    const res = await api(`/api/brands/${brandId}/integrations/${activeProv}/connect`,
+      {method:"POST", body:JSON.stringify({config, credentials})});
+    if(res.status === "error") throw new Error(res.last_error || "Connection failed");
+    $("#connectDlg").close(); toast("Connected " + PROVIDERS[activeProv].name); renderGrid();
+  } catch(e){ $("#dlgErr").textContent = e.message; }
+  finally { $("#dlgSave").disabled = false; }
+};
+
+// ---- Boot ----
+async function boot(){
+  try { await api("/api/auth/me"); }
+  catch(e){ localStorage.removeItem("nq_token"); token=""; $("#app").classList.add("hidden"); $("#login").classList.remove("hidden"); return; }
+  $("#login").classList.add("hidden"); $("#app").classList.remove("hidden");
+  await loadBrands(); await renderGrid();
+}
+if(token) boot();
+</script>
+</body>
+</html>

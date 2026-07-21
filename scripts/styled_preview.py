@@ -33,6 +33,26 @@ def _c(color: str | None) -> str:
     return _COLORS.get(color or "", "")
 
 
+def _inr(x) -> str:
+    """Format a number as Indian-grouped rupees, e.g. 2499017 -> 'Rs.24,99,017'."""
+    if x is None:
+        return "—"
+    n = int(round(float(x)))
+    neg = n < 0
+    s = str(abs(n))
+    if len(s) > 3:
+        last3 = s[-3:]
+        rest = s[:-3]
+        parts = []
+        while len(rest) > 2:
+            parts.insert(0, rest[-2:])
+            rest = rest[:-2]
+        if rest:
+            parts.insert(0, rest)
+        s = ",".join(parts) + "," + last3
+    return ("-" if neg else "") + "Rs." + s
+
+
 # --------------------------------------------------------------------------
 # Components
 # --------------------------------------------------------------------------
@@ -392,7 +412,155 @@ body{margin:0;background:#0a0a0f;color:#e6e6ef;
 .aimpact{font-size:12.5px;font-weight:700;margin-top:8px}
 .rfoot{color:#6b6b80;font-size:11.5px;line-height:1.7;margin-top:30px;
  border-top:1px solid #1a1a26;padding-top:16px}
+.narrative{background:#111019;border:1px solid #201f30;border-radius:14px;padding:8px 22px 20px}
+.narrative h2{border-top:none;padding-top:16px}
+.narrative p{color:#b9b9c8;font-size:13.5px}
+.narrative table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px}
+.narrative th{text-align:right;color:#8b8b9e;font-size:11px;text-transform:uppercase;padding:8px 12px;border-bottom:1px solid #201f30}
+.narrative th:first-child{text-align:left}
+.narrative td{text-align:right;padding:8px 12px;border-bottom:1px solid #191826}
+.narrative td:first-child{text-align:left;color:#c7c7d4}
+.narrative ul{list-style:none;padding:0}
+.narrative li{padding:5px 0;border-bottom:1px solid #16161f;color:#b9b9c8}
+.narrative blockquote{color:#8b8b9e;font-size:12.5px;border-left:3px solid #7c3aed;padding-left:12px;margin:10px 0}
+.scard{background:#12121a;border:1px solid #201f30;border-radius:14px;padding:2px 22px 16px;margin-bottom:6px}
+.scard.narrative h2{font-size:14px;color:#c7c7d4;text-transform:none;letter-spacing:0}
 """
+
+
+def render_money_flow_from_compute(money: dict, brand: str, period: str, narrative_html: str = "") -> str:
+    """Render the True ROAS / Money Flow report in the styled card layout from a
+    compute_money_flow() metrics block. Handles ad-spend-not-connected gracefully.
+    Optionally appends the AI narrative as a 'Full analysis' prose section.
+    """
+    mi = money["money_in"]
+    mo = money["money_out"]
+    eff = money.get("efficiency", {})
+    rows = {r["category"]: r for r in mi["breakdown"]}
+    gross = mi["gross_sales"]
+    net = mi["net_sales"]
+    collected = rows.get("Collected (paid)", {})
+    pending = rows.get("Pending / not yet collected", {})
+    cancelled = rows.get("Cancelled / voided", {})
+    returns = rows.get("Returns & refunds", {})
+    ad_connected = bool(mo.get("ad_spend_connected"))
+    collect_pct = round((collected.get("amount", 0) / gross * 100) if gross else 0, 1)
+
+    blocks: list[str] = []
+
+    # Hero (custom copy so it reads well with or without ad spend).
+    if ad_connected:
+        line = (
+            f"You spent <span style='color:{_COLORS['amber']}'>{_inr(mo['reported_ad_spend'])}</span> on ads. "
+            f"<span style='color:{_COLORS['amber']}'>{_inr(net)}</span> net revenue reached your store. "
+            f"Real return: <span style='color:{_COLORS['green']}'>{eff.get('real_roas','—')}x</span>."
+        )
+        note = "Platform numbers include 18% GST correction and reconciliation against Shopify actuals."
+    else:
+        line = (
+            f"<span style='color:{_COLORS['amber']}'>{_inr(net)}</span> net revenue reached your store. "
+            f"Of <span style='color:{_COLORS['white']}'>{_inr(gross)}</span> placed, "
+            f"<span style='color:{_COLORS['green']}'>{collect_pct}%</span> collected."
+        )
+        note = "Ad spend not connected — connect Meta / Google Ads to unlock the three ROAS figures."
+    blocks.append(
+        "<div class='hero'>"
+        f"<div class='hero-top'><span class='badge'>{esc(brand)}</span>"
+        f"<span class='hero-meta'>True ROAS / Money Flow Report &nbsp;·&nbsp; {esc(period)} &nbsp;·&nbsp; Shopify</span></div>"
+        f"<div class='hero-line'>{line}</div><div class='hero-note'>{esc(note)}</div></div>"
+    )
+
+    if not ad_connected:
+        blocks.append(warning("**Ad spend not connected.** True ROAS, GST-corrected ROAS, and dashboard ROAS "
+                              "cannot be computed until an ad platform (Meta / Google) is connected. "
+                              "Everything below is real Shopify cash-flow data."))
+
+    # Money In / Money Out panels.
+    money_in_rows = [
+        {"label": "Total Orders (placed)", "value": f"{mi['total_orders']} orders / {_inr(gross)}"},
+        {"label": "Collected (paid)", "value": f"{collected.get('orders','—')} orders / {_inr(collected.get('amount',0))}"},
+        {"label": "Pending / not yet collected", "value": f"{pending.get('orders','—')} orders / {_inr(pending.get('amount',0))}", "color": "amber"},
+        {"label": "Cancelled / voided", "value": f"{cancelled.get('orders','—')} orders / {_inr(cancelled.get('amount',0))}", "color": "red"},
+    ]
+    if returns.get("amount"):
+        money_in_rows.append({"label": "Returns & refunds", "value": _inr(returns["amount"]), "color": "red"})
+    money_in_rows.append({"label": "💚 Net Revenue Retained", "value": _inr(net), "color": "green", "highlight": True})
+
+    if ad_connected:
+        money_out_rows = []
+        for plat, amt in (mo.get("by_platform") or {}).items():
+            money_out_rows.append({"label": f"{plat.replace('_', ' ').title()} Spend", "value": _inr(amt)})
+        money_out_rows += [
+            {"label": "Total Reported Spend", "value": _inr(mo["reported_ad_spend"])},
+            {"label": f"GST on Ad Spend ({mo.get('gst_rate',0.18)*100:.0f}%)", "value": "+ " + _inr(mo["real_ad_cost"] - mo["reported_ad_spend"]), "color": "amber"},
+            {"label": "🔴 Total Actual Ad Cost", "value": _inr(mo["real_ad_cost"]), "color": "purple", "highlight": True},
+        ]
+    else:
+        money_out_rows = [
+            {"label": "Ad platform", "value": "Not connected", "color": "amber"},
+            {"label": "Connect Meta / Google Ads", "value": "to unlock ROAS"},
+        ]
+
+    blocks.append(section_label("Money In & Money Out"))
+    blocks.append(two_panels(
+        panel("💰 Money In — Shopify Actuals", money_in_rows, "green"),
+        panel("💸 Money Out — True Ad Cost", money_out_rows, "red"),
+    ))
+
+    # Stat grid: the headline cash-flow facts.
+    blocks.append(stat_grid([
+        {"label": "Net Revenue Retained", "value": _inr(net), "caption": "cash actually collected, after returns", "color": "green"},
+        {"label": "Collection Rate", "value": f"{collect_pct}%", "caption": "of gross order value collected", "color": "amber" if collect_pct < 80 else "green"},
+        {"label": "Uncollected (Pending)", "value": _inr(pending.get("amount", 0)), "caption": f"{pending.get('orders','—')} orders — biggest recoverable lever", "color": "amber"},
+        {"label": "Cancelled / Voided", "value": _inr(cancelled.get("amount", 0)), "caption": f"{cancelled.get('orders','—')} orders lost outright", "color": "red"},
+    ]))
+
+    if narrative_html:
+        blocks.append(section_label("Full Analysis"))
+        blocks.append(f"<div class='narrative'>{narrative_html}</div>")
+
+    return page(brand, "True ROAS / Money Flow Report", blocks)
+
+
+def render_narrative_report(brand: str, title: str, period: str, narrative_md: str) -> str:
+    """Render ANY report's Markdown (AI or template) in the adverti card style:
+    a hero header + one styled card per '## SECTION'. Used for report types that
+    don't have a dedicated data-card renderer, so every report looks consistent.
+    """
+    from scripts.preview_report import markdown_to_html
+
+    sections: list[tuple[str, list[str]]] = []
+    pre: list[str] = []
+    current: tuple[str, list[str]] | None = None
+    for ln in narrative_md.split("\n"):
+        s = ln.strip()
+        if s.startswith("## "):
+            current = (s[3:], [])
+            sections.append(current)
+        elif s.startswith("# "):
+            continue  # doc title -> shown in hero
+        elif current is None and s.startswith("_") and s.endswith("_"):
+            continue  # period line -> shown in hero
+        elif current is None:
+            pre.append(ln)
+        else:
+            current[1].append(ln)
+
+    blocks = [
+        "<div class='hero'>"
+        f"<div class='hero-top'><span class='badge'>{esc(brand)}</span>"
+        f"<span class='hero-meta'>{esc(period)}</span></div>"
+        f"<div class='hero-line' style='font-size:26px'>{esc(title)}</div></div>"
+    ]
+    if any(l.strip() for l in pre):
+        blocks.append(f"<div class='scard narrative'>{markdown_to_html(chr(10).join(pre))}</div>")
+    for name, content in sections:
+        blocks.append(section_label(name))
+        blocks.append(f"<div class='scard narrative'>{markdown_to_html(chr(10).join(content))}</div>")
+    return page(brand, title, blocks)
+
+
+# report type value -> composer
 
 
 def page(brand: str, title: str, blocks: list[str]) -> str:

@@ -1,11 +1,15 @@
 """FastAPI application entrypoint."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 from app.api import auth, brands, integrations, reports, shopify_oauth
 from app.config import settings
+
+_CONNECTIONS_PAGE = Path(__file__).parent / "web" / "connections.html"
 
 app = FastAPI(
     title="NQ Tracking Platform API",
@@ -28,3 +32,9 @@ def root():
 @app.get("/health", tags=["meta"])
 def health():
     return {"status": "ok", "env": settings.app_env}
+
+
+@app.get("/connections", include_in_schema=False)
+def connections_page():
+    """Self-service connections UI (login + connect data sources)."""
+    return FileResponse(_CONNECTIONS_PAGE)

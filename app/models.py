@@ -55,6 +55,7 @@ class IntegrationProvider(str, enum.Enum):
     google_ads = "google_ads"
     ga4 = "ga4"
     search_console = "search_console"
+    clarity = "clarity"
 
 
 class IntegrationStatus(str, enum.Enum):

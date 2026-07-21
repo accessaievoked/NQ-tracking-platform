@@ -17,6 +17,7 @@ Examples:
 """
 from __future__ import annotations
 
+import json
 import sys
 import webbrowser
 from datetime import datetime, timedelta, timezone
@@ -31,8 +32,15 @@ from app.reports.generator import generate_report_narrative
 from app.reports.specs import get_spec
 
 
-def _build_facts(report_type, brand_name, label, orders, ads):
-    money = compute_money_flow(orders, ads, gst_rate=settings.default_gst_rate)
+# Report types that render in the styled adverti-style card layout.
+_STYLED_MONEY_FLOW = {
+    ReportType.true_roas_money_flow,
+    ReportType.money_flow_weekly,
+    ReportType.monthly_money_flow,
+}
+
+
+def _build_facts(report_type, brand_name, label, money):
     composed = compose_facts(report_type, money)
     if composed is not None:
         composed.update({"brand": brand_name, "period": label})
@@ -88,7 +96,8 @@ def main() -> None:
             orders = aggregate_orders(conn.normalize(conn.fetch(start, end)))
             ads = get_meta_ad_spend(db, brand.id, start, end)
 
-    facts = _build_facts(report_type, brand_name, label, orders, ads)
+    money = compute_money_flow(orders, ads, gst_rate=settings.default_gst_rate)
+    facts = _build_facts(report_type, brand_name, label, money)
     if force_template:
         from app.reports.generator import _fallback_report
         narrative = _fallback_report(spec, brand_name, label, facts)
@@ -99,11 +108,23 @@ def main() -> None:
               else "Claude" if settings.anthropic_api_key
               else "offline template (set ANTHROPIC_API_KEY for AI prose)")
     print(f"# Report: {spec.title}   |   engine: {engine}\n")
-    print("=== GENERATED REPORT (also written to HTML below) ===")
+    print("=== COMPUTED FACTS (all the AI receives; it may not invent or alter any number) ===")
+    print(json.dumps(facts, indent=2, default=str))
+    print("\n=== GENERATED REPORT (prose written by the engine from the facts above) ===")
     print(narrative)
 
-    from scripts.preview_report import build_html
-    page = build_html(spec.title, brand_name, narrative)
+    # Money-flow reports get the styled adverti-style card layout (data cards +
+    # the AI narrative as a 'Full analysis' section). Everything else gets the
+    # plain markdown HTML.
+    if report_type in _STYLED_MONEY_FLOW:
+        from scripts.preview_report import markdown_to_html
+        from scripts.styled_preview import render_money_flow_from_compute
+        page = render_money_flow_from_compute(money, brand_name, label, markdown_to_html(narrative))
+    else:
+        # Every other report type gets the adverti card style too: hero + one
+        # styled card per section, rendered from the AI/template narrative.
+        from scripts.styled_preview import render_narrative_report
+        page = render_narrative_report(brand_name, spec.title, label, narrative)
     out_dir = Path("previews")
     out_dir.mkdir(exist_ok=True)
     out_path = (out_dir / f"{report_type.value}.html").resolve()
