@@ -50,10 +50,10 @@ def _claude_narrative(brand_name: str, period: str, metrics: dict[str, Any]) -> 
 
     # Fail fast: a bad key or network block should error in ~30s, not hang on
     # long retry backoff. The caller falls back to the deterministic template.
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=30.0, max_retries=1)
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=60.0, max_retries=1)
     msg = client.messages.create(
         model=settings.anthropic_model,
-        max_tokens=2000,
+        max_tokens=4000,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": build_prompt(brand_name, period, metrics)}],
     )
@@ -195,10 +195,12 @@ def _claude_report(spec, brand_name: str, period: str, facts: dict[str, Any]) ->
 
     # Fail fast: a bad key or network block should error in ~30s, not hang on
     # long retry backoff. The caller falls back to the deterministic template.
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=30.0, max_retries=1)
+    # Longer timeout + generous max_tokens so multi-section reports (all headings
+    # required, verbatim prompts) finish instead of getting cut off mid-section.
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=90.0, max_retries=1)
     msg = client.messages.create(
         model=settings.anthropic_model,
-        max_tokens=2500,
+        max_tokens=8000,
         system=spec.system_prompt(),
         messages=[{"role": "user", "content": build_report_prompt(brand_name, period, facts)}],
     )

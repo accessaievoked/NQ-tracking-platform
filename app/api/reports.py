@@ -8,8 +8,18 @@ from app.db import get_db
 from app.deps import get_owned_brand
 from app.models import Brand, Report, ReportType
 from app.reports.specs import has_spec
-from app.schemas import ReportCreate, ReportDetail, ReportSummary
-from app.services import generate_ai_report, generate_money_flow_report
+from app.schemas import (
+    ReportCreate,
+    ReportDetail,
+    ReportGenerated,
+    ReportGenerateRequest,
+    ReportSummary,
+)
+from app.services import (
+    generate_ai_report,
+    generate_money_flow_report,
+    generate_report_from_data,
+)
 
 router = APIRouter(prefix="/api/brands/{brand_id}/reports", tags=["reports"])
 
@@ -31,7 +41,7 @@ def create_report(
     db: Session = Depends(get_db),
 ):
     # money_flow computes its own metrics from connected data.
-    if body.type == ReportType.money_flow:
+    if body.type == ReportType.money_flow_report:
         return generate_money_flow_report(db, brand, body.period_start, body.period_end)
 
     # Spec-backed report types are narrated from a supplied facts bundle until
@@ -51,6 +61,21 @@ def create_report(
         status.HTTP_501_NOT_IMPLEMENTED,
         f"Report type '{body.type.value}' not implemented yet",
     )
+
+
+@router.post("/generate", response_model=ReportGenerated)
+def generate(
+    body: ReportGenerateRequest,
+    brand: Brand = Depends(get_owned_brand),
+    db: Session = Depends(get_db),
+):
+    """Generate a report from the brand's live data on demand (Insights page)."""
+    if not has_spec(body.type):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Report type '{body.type.value}' has no generator yet.",
+        )
+    return generate_report_from_data(db, brand, body.type, body.days)
 
 
 @router.get("/{report_id}", response_model=ReportDetail)

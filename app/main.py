@@ -9,7 +9,9 @@ from fastapi.responses import FileResponse, RedirectResponse
 from app.api import auth, brands, integrations, reports, shopify_oauth
 from app.config import settings
 
-_CONNECTIONS_PAGE = Path(__file__).parent / "web" / "connections.html"
+_WEB = Path(__file__).parent / "web"
+_CONNECTIONS_PAGE = _WEB / "connections.html"
+_APP_PAGE = _WEB / "app.html"
 
 app = FastAPI(
     title="NQ Tracking Platform API",
@@ -38,3 +40,9 @@ def health():
 def connections_page():
     """Self-service connections UI (login + connect data sources)."""
     return FileResponse(_CONNECTIONS_PAGE)
+
+
+@app.get("/app", include_in_schema=False)
+def app_page():
+    """NQ Brand Library web app (Figma design)."""
+    return FileResponse(_APP_PAGE)

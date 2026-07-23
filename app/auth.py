@@ -4,29 +4,43 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import Client, User
+from app.models import Brand, Client, User
 from app.security import make_token, read_token
 
 MAGIC_SALT = "magic-link"
 SESSION_SALT = "session"
 
 
-def issue_magic_link(db: Session, email: str) -> str:
-    """Create the user (and a client) on first sight, return a login URL.
-
-    For an in-house tool this "just works": the first time a client email is
-    used, we provision it. Tighten this to an allow-list before go-live.
-    """
+def register_user(db: Session, email: str, name: str | None = None) -> User:
+    """Whitelist an email so it can sign in (admin action). On first registration
+    it provisions the whole account — client, user, and a first brand — all named
+    after ``name`` (falling back to the email prefix). No brand-creation UI is
+    needed: every account starts with one ready to connect."""
+    email = email.strip().lower()
     user = db.query(User).filter(User.email == email).first()
     if user is None:
-        client = Client(name=email.split("@")[0])
+        display = name or email.split("@")[0]
+        client = Client(name=display)
         db.add(client)
         db.flush()
-        user = User(client_id=client.id, email=email)
+        user = User(client_id=client.id, email=email, name=display)
         db.add(user)
+        db.add(Brand(client_id=client.id, name=display))  # first brand = same name
         db.commit()
         db.refresh(user)
+    return user
 
+
+def issue_magic_link(db: Session, email: str) -> str | None:
+    """Return a login URL ONLY for a pre-registered, active email; else None.
+
+    Accounts are no longer auto-provisioned on login — an admin must register
+    the email first (see scripts/register_user.py). This is the allow-list.
+    """
+    email = email.strip().lower()
+    user = db.query(User).filter(User.email == email).first()
+    if user is None or not user.is_active:
+        return None
     token = make_token({"uid": user.id}, salt=MAGIC_SALT)
     return f"{settings.app_base_url}/api/auth/verify?token={token}"
 

@@ -17,6 +17,11 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 @router.post("/magic-link", response_model=MagicLinkIssued)
 def request_magic_link(body: MagicLinkRequest, db: Session = Depends(get_db)):
     login_url = issue_magic_link(db, body.email)
+    if login_url is None:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "This email is not registered. Ask your administrator to add it.",
+        )
     # In local dev, hand back the URL directly (no email service required).
     return MagicLinkIssued(sent=True, dev_login_url=login_url if settings.is_local else None)
 
@@ -27,9 +32,11 @@ def verify(token: str, db: Session = Depends(get_db)):
     if not result:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired link")
     user, session = result
-    return SessionOut(token=session, user_id=user.id, client_id=user.client_id, email=user.email)
+    return SessionOut(token=session, user_id=user.id, client_id=user.client_id,
+                      email=user.email, name=user.name)
 
 
 @router.get("/me", response_model=SessionOut)
 def me(user: User = Depends(get_current_user)):
-    return SessionOut(token="", user_id=user.id, client_id=user.client_id, email=user.email)
+    return SessionOut(token="", user_id=user.id, client_id=user.client_id,
+                      email=user.email, name=user.name)

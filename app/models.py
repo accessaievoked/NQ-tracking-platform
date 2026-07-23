@@ -65,40 +65,50 @@ class IntegrationStatus(str, enum.Enum):
 
 
 class ReportType(str, enum.Enum):
-        # --- Legacy / generic (kept for back-compat) ---
-    money_flow = "money_flow"
+    # --- Account & performance ---
     account_audit = "account_audit"
-    product_pl = "product_pl"
-    performance = "performance"
+    weekly_performance = "weekly_performance"
+    cpa_diagnosis = "cpa_diagnosis"
+    day_of_week = "day_of_week"
 
-    # --- Alerts (event-triggered) ---
-    cpa_spike_alert = "cpa_spike_alert"
-    creative_fatigue_alert = "creative_fatigue_alert"
-    daily_spend_alert = "daily_spend_alert"
-    wasted_spend_alert = "wasted_spend_alert"
+    # --- Spend & budget ---
+    wasted_spend = "wasted_spend"
+    budget_reallocation = "budget_reallocation"
+    scaling_opportunities = "scaling_opportunities"
+    diminishing_returns = "diminishing_returns"
 
-    # --- Weekly ---
-    cod_rto_weekly = "cod_rto_weekly"
-    creative_health_weekly = "creative_health_weekly"
-    money_flow_weekly = "money_flow_weekly"
-    platform_compare_weekly = "platform_compare_weekly"
+    # --- Creative ---
+    creative_fatigue = "creative_fatigue"
+    ad_ranking = "ad_ranking"
+    messaging_angles = "messaging_angles"
+    creative_briefs = "creative_briefs"
+
+    # --- Audience & targeting ---
+    audience_analysis = "audience_analysis"
+    demographic_breakdown = "demographic_breakdown"
+    retargeting_audit = "retargeting_audit"
+    geographic_performance = "geographic_performance"
+    advantage_plus_readiness = "advantage_plus_readiness"
+    placement_analysis = "placement_analysis"
+
+    # --- Google-specific ---
+    search_terms_audit = "search_terms_audit"
+    shopping_pmax_products = "shopping_pmax_products"
+    impression_share = "impression_share"
+    keyword_opportunities = "keyword_opportunities"
+
+    # --- Cross-platform & planning ---
     weekly_action_plan = "weekly_action_plan"
+    platform_comparison = "platform_comparison"
+    cross_platform_budget = "cross_platform_budget"
+    funnel_mapping = "funnel_mapping"
 
-    # --- Monthly ---
-    monthly_customer_quality = "monthly_customer_quality"
-    monthly_money_flow = "monthly_money_flow"
-    monthly_performance = "monthly_performance"
-    monthly_product_pl = "monthly_product_pl"
-
-    # --- Deep-dive / strategy (adverti-style) ---
-    # account_audit + product_pl (legacy, above) are the Full Account Audit
-    # health-score and Product P&L reports respectively.
-    meta_ads_kill_strategy = "meta_ads_kill_strategy"
-    campaign_attribution = "campaign_attribution"
-    ad_strategy = "ad_strategy"
-    true_roas_money_flow = "true_roas_money_flow"
-    campaign_revamp = "campaign_revamp"
-    meta_ads_performance = "meta_ads_performance"
+    # --- Commerce / money ---
+    money_flow_report = "money_flow_report"
+    product_pl = "product_pl"
+    reality_check = "reality_check"
+    cod_prepaid = "cod_prepaid"
+    customer_quality = "customer_quality"
 
 
 class ReportStatus(str, enum.Enum):

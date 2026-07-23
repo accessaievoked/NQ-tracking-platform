@@ -40,17 +40,16 @@ def test_markdown_escapes_html():
 
 def test_build_html_wraps_a_real_report():
     facts = {
-        "headline": "You spent Rs.4,43,544 on ads. Rs.9,62,679 reached your store.",
-        "the_roas_reality": [
-            {"metric": "Dashboard-Claimed ROAS", "value": "3.03x"},
-            {"metric": "True Store ROAS", "value": "1.84x"},
+        "bottom_line": "You spent Rs.4,43,544 on ads. Rs.9,62,679 reached your store.",
+        "gst_correction": [
+            {"metric": "ROAS", "platform": "3.03x", "shopify_verified": "1.84x"},
         ],
     }
-    md = generate_report_narrative(ReportType.true_roas_money_flow, "Covera", "Jul 2026", facts)
-    page = build_html("True ROAS / Money Flow Report", "Covera", md)
+    md = generate_report_narrative(ReportType.money_flow_report, "Covera", "Jul 2026", facts)
+    page = build_html("Money Flow Report", "Covera", md)
     assert page.startswith("<!doctype html>")
-    assert "<title>Covera — True ROAS / Money Flow Report</title>" in page
+    assert "<title>Covera — Money Flow Report</title>" in page
     assert "You spent Rs.4,43,544" in page
     # Section headings from the spec are rendered as <h2>.
-    assert "<h2>HEADLINE</h2>" in page
-    assert "<table>" in page  # the ROAS reality list-of-dicts becomes a table
+    assert "<h2>BOTTOM LINE</h2>" in page
+    assert "<table>" in page  # the gst_correction list-of-dicts becomes a table

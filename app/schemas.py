@@ -33,6 +33,7 @@ class SessionOut(BaseModel):
     user_id: str
     client_id: str
     email: str
+    name: str | None = None
 
 
 # --- Brands ---
@@ -66,7 +67,7 @@ class BrandDetail(BrandOut):
 
 # --- Reports ---
 class ReportCreate(BaseModel):
-    type: ReportType = ReportType.money_flow
+    type: ReportType = ReportType.money_flow_report
     period_start: datetime
     period_end: datetime
     # For spec-backed report types that don't yet have a live compute path,
@@ -91,3 +92,16 @@ class ReportDetail(ReportSummary):
     narrative_md: str | None = None
     artifact_url: str | None = None
     error: str | None = None
+
+
+class ReportGenerateRequest(BaseModel):
+    type: ReportType
+    days: int = 30
+
+
+class ReportGenerated(BaseModel):
+    type: str
+    title: str
+    period: str
+    narrative_md: str
+    facts: dict

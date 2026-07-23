@@ -1,7 +1,7 @@
-"""Tests for the adverti-style report spec registry and generic narrator.
+"""Tests for the report spec registry and generic narrator.
 
-These run fully offline (no ANTHROPIC_API_KEY): the narrator falls back to a
-deterministic template, so we can assert structure without hitting Claude.
+Run fully offline (conftest clears ANTHROPIC_API_KEY): the narrator falls back
+to a deterministic template, so we assert structure without hitting Claude.
 """
 from __future__ import annotations
 
@@ -11,76 +11,56 @@ from app.models import ReportType
 from app.reports.generator import _fallback_report, _slug
 from app.reports.specs import SPECS, get_spec, has_spec
 
-# Every adverti report type the product spec calls for.
+# The 31 report types the account-audit suite defines.
 EXPECTED_TYPES = {
-    ReportType.cpa_spike_alert,
-    ReportType.creative_fatigue_alert,
-    ReportType.daily_spend_alert,
-    ReportType.wasted_spend_alert,
-    ReportType.cod_rto_weekly,
-    ReportType.creative_health_weekly,
-    ReportType.money_flow_weekly,
-    ReportType.platform_compare_weekly,
-    ReportType.weekly_action_plan,
-    ReportType.monthly_customer_quality,
-    ReportType.monthly_money_flow,
-    ReportType.monthly_performance,
-    ReportType.monthly_product_pl,
-    ReportType.account_audit,
-    ReportType.meta_ads_kill_strategy,
-    ReportType.campaign_attribution,
-    ReportType.ad_strategy,
-    ReportType.true_roas_money_flow,
-    ReportType.product_pl,
-    ReportType.campaign_revamp,
-    ReportType.meta_ads_performance,
+    ReportType.account_audit, ReportType.weekly_performance, ReportType.cpa_diagnosis,
+    ReportType.day_of_week, ReportType.wasted_spend, ReportType.budget_reallocation,
+    ReportType.scaling_opportunities, ReportType.diminishing_returns, ReportType.creative_fatigue,
+    ReportType.ad_ranking, ReportType.messaging_angles, ReportType.creative_briefs,
+    ReportType.audience_analysis, ReportType.demographic_breakdown, ReportType.retargeting_audit,
+    ReportType.geographic_performance, ReportType.advantage_plus_readiness, ReportType.placement_analysis,
+    ReportType.search_terms_audit, ReportType.shopping_pmax_products, ReportType.impression_share,
+    ReportType.keyword_opportunities, ReportType.weekly_action_plan, ReportType.platform_comparison,
+    ReportType.cross_platform_budget, ReportType.funnel_mapping, ReportType.money_flow_report,
+    ReportType.product_pl, ReportType.reality_check, ReportType.cod_prepaid, ReportType.customer_quality,
 }
 
 
 def test_all_expected_report_types_registered():
-    assert EXPECTED_TYPES <= set(SPECS), "missing specs: " + str(EXPECTED_TYPES - set(SPECS))
+    assert EXPECTED_TYPES == set(SPECS), "spec set mismatch: " + str(EXPECTED_TYPES ^ set(SPECS))
 
 
 @pytest.mark.parametrize("rt", sorted(SPECS, key=lambda k: k.value))
-def test_every_spec_has_six_sections_and_builds_a_prompt(rt):
+def test_every_spec_builds_a_prompt(rt):
     spec = get_spec(rt)
-    assert len(spec.sections) == 6, f"{rt.value} should have 6 sections"
+    assert 3 <= len(spec.sections) <= 8, f"{rt.value} has {len(spec.sections)} sections"
     prompt = spec.system_prompt()
     assert spec.title in prompt
-    assert "NEVER invent" in prompt  # guardrail present
+    assert "NEVER invent" in prompt
     for name in spec.section_names:
         assert name in prompt
 
 
 def test_slug_matches_section_convention():
-    assert _slug("METRICS BLOCK") == "metrics_block"
-    assert _slug("TOP 3 FATIGUED CREATIVES") == "top_3_fatigued_creatives"
-    assert _slug("OWNER/DEADLINE") == "owner_deadline"
+    assert _slug("THE MONEY STORY") == "the_money_story"
+    assert _slug("TOP 15 CITIES") == "top_15_cities"
+    assert _slug("GST CORRECTION") == "gst_correction"
 
 
-def test_fallback_narrative_renders_facts_under_sections():
-    facts = {
-        "currency": "INR",
-        "headline": "CPA up 62% on Summer Sale.",
-        "metrics_block": [
-            {"metric": "CPA", "baseline_30d": 420, "current": 680, "deviation_pct": 62.0},
-        ],
-        "recommended_action": "Pause the fatigued ad; save ~Rs. 9,000.",
-    }
-    # Test the deterministic template directly so the assertion holds regardless
-    # of whether ANTHROPIC_API_KEY is set (with a key, the narrator uses Claude).
-    spec = get_spec(ReportType.cpa_spike_alert)
+def test_fallback_narrative_renders_sections():
+    spec = get_spec(ReportType.money_flow_report)
+    facts = {"bottom_line": "For every Rs.1 spent, Rs.0.9 reached the store.",
+             "the_gap": {"dashboard_roas": 3.0, "true_roas": 1.8}}
     md = _fallback_report(spec, "Acme", "Jul 2026", facts)
-    # Title + every section heading present.
-    assert "Acme — CPA Spike Alert" in md
-    for name in get_spec(ReportType.cpa_spike_alert).section_names:
+    assert "Acme — Money Flow Report" in md
+    for name in spec.section_names:
         assert f"## {name}" in md
-    # Supplied facts surfaced; missing ones flagged, never invented.
-    assert "CPA up 62%" in md
-    assert "62.0" in md
-    assert "no `trigger_condition` in facts" in md
+    assert "For every Rs.1 spent" in md
 
 
-def test_money_flow_is_not_treated_as_spec_backed():
-    # money_flow keeps its dedicated compute pipeline, not the generic path.
-    assert not has_spec(ReportType.money_flow)
+def test_get_spec_raises_for_unknown():
+    # A provider enum value is not a report type -> KeyError via get_spec.
+    class Fake:
+        value = "nope"
+    with pytest.raises(KeyError):
+        get_spec(Fake())

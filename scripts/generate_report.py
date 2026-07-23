@@ -34,9 +34,7 @@ from app.reports.specs import get_spec
 
 # Report types that render in the styled adverti-style card layout.
 _STYLED_MONEY_FLOW = {
-    ReportType.true_roas_money_flow,
-    ReportType.money_flow_weekly,
-    ReportType.monthly_money_flow,
+    ReportType.money_flow_report,
 }
 
 
@@ -66,7 +64,7 @@ def main() -> None:
         print("Usage: python -m scripts.generate_report <brand_id|demo> [report_type] [days] [--no-ai] [--no-open]")
         raise SystemExit(1)
     target = args[0]
-    type_str = args[1] if len(args) > 1 else "true_roas_money_flow"
+    type_str = args[1] if len(args) > 1 else "money_flow_report"
     days = int(args[2]) if len(args) > 2 else 30
 
     try:

@@ -54,8 +54,11 @@ def client(db_session):
 
 
 @pytest.fixture()
-def auth_client(client):
+def auth_client(client, db_session):
     """A TestClient carrying a valid session token (magic-link flow)."""
+    from app.auth import register_user
+
+    register_user(db_session, "owner@brand.com")  # login requires registration
     issued = client.post("/api/auth/magic-link", json={"email": "owner@brand.com"}).json()
     token = _token_from_url(issued["dev_login_url"])
     session = client.get(f"/api/auth/verify?token={token}").json()
