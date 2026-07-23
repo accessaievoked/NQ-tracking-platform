@@ -1,0 +1,160 @@
+{
+  "brand": "Covera",
+  "report_title": "True ROAS Money Flow Report",
+  "period": "July 1–18, 2026",
+  "platforms": "All Platforms (Meta + Google)",
+  "hero": {
+    "spent": "Rs.4,43,544",
+    "net_revenue": "Rs.9,62,679",
+    "dashboard_roas": "3.03x",
+    "true_roas": "1.84x",
+    "note": "Platform numbers include GST correction (18%) and reconciliation against Shopify actuals. UTM coverage: 42% — campaign-level numbers are platform-reported and GST-corrected only."
+  },
+  "warning": "**UTM coverage: 42% (181 of 313 orders have no UTM tags).** This is below the 60% threshold. Campaign-level ROAS figures in this report are **platform-reported and GST-corrected** — not confirmed store-retained numbers. Fix UTMs before optimising by campaign. True retained ROAS is reported at account level only.",
+  "roas_cards": [
+    {"label": "🔴 Dashboard Claims", "value": "3.03x", "caption": "Meta + Google blended reported purchase ROAS", "color": "red"},
+    {"label": "🟡 GST-Corrected ROAS", "value": "2.56x", "caption": "After adding 18% GST to actual ad spend", "color": "amber"},
+    {"label": "🟣 True Store ROAS", "value": "1.84x", "caption": "Net Shopify revenue ÷ total cost incl. GST", "color": "purple"}
+  ],
+  "inflation_callout": {
+    "title": "Dashboard Inflation: Rs.6,22,824 overstated this month",
+    "body": "Dashboards report **3.03x ROAS** on Rs.4,43,544 spend = Rs.13,42,166 claimed revenue. Shopify net sales = **Rs.9,62,679**. The gap of **Rs.3,79,487** is from platforms double-counting cross-platform conversions, attributing returns, and ignoring GST. Add GST cost (Rs.79,838) and the effective shortfall vs dashboard expectations is **Rs.6,22,824**. Biggest leak: Returns/Reversals at **Rs.1,61,847** (13.7% of gross), followed by **GST invisible cost at Rs.79,838**."
+  },
+  "money_in": {
+    "header": "💰 Money In — Shopify Actuals",
+    "rows": [
+      {"label": "Total Shopify Orders", "value": "313 orders / Rs.11,68,611"},
+      {"label": "Successfully Fulfilled", "value": "267 orders / Rs.9,95,174 est."},
+      {"label": "Cancellations / Edits", "value": "~22 orders / Rs.44,085 disc.", "color": "red"},
+      {"label": "Returns & Reversals", "value": "Rs.1,61,847", "color": "red"},
+      {"label": "Discounts Applied", "value": "Rs.44,085"},
+      {"label": "💚 Net Revenue Retained", "value": "Rs.9,62,679", "color": "green", "highlight": true}
+    ]
+  },
+  "money_out": {
+    "header": "💸 Money Out — True Ad Cost",
+    "rows": [
+      {"label": "Meta Ad Spend", "value": "Rs.3,46,075"},
+      {"label": "Google Ad Spend", "value": "Rs.97,469"},
+      {"label": "Total Reported Spend", "value": "Rs.4,43,544"},
+      {"label": "GST on Ad Spend (18%)", "value": "+ Rs.79,838", "color": "amber"},
+      {"label": "🔴 Total Actual Ad Cost", "value": "Rs.5,23,382", "color": "purple", "highlight": true},
+      {"label": "Platform Reported Revenue", "value": "Rs.13,42,166"},
+      {"label": "Shopify Net Revenue", "value": "Rs.9,62,679"},
+      {"label": "Attribution Gap", "value": "Rs.3,79,487", "color": "red"}
+    ]
+  },
+  "stat_grid": [
+    {"label": "For Every Rs.1 Spent (incl. GST)", "value": "Rs.1.84", "caption": "in net Shopify revenue reached your store", "color": "green"},
+    {"label": "Gross Margin Before COGS", "value": "~45%", "caption": "assuming ~55% COGS (fashion avg). Verify with actuals.", "color": "amber"},
+    {"label": "Dashboard vs Reality Gap", "value": "Rs.6,22,824", "caption": "overstated this month by platforms", "color": "red"},
+    {"label": "Biggest Leak", "value": "Returns", "caption": "Rs.1,61,847 in reversals (13.7% of gross)", "color": "red"}
+  ],
+  "gst_bridge": {
+    "title": "GST Correction Bridge",
+    "tag": "18% GST HIDDEN COST",
+    "cols": ["Metric", "Platform Reported", "GST-Corrected", "Shopify Verified"],
+    "rows": [
+      {"cells": ["Revenue", "Rs.13,42,166", "Rs.13,42,166", "Rs.9,62,679 (net sales)"]},
+      {"cells": ["Ad Spend", "Rs.4,43,544", "Rs.5,23,382 (×1.18)", "—"]},
+      {"cells": ["ROAS", {"value": "3.03x", "color": "red"}, {"value": "2.56x", "color": "amber"}, {"value": "1.84x (True)", "color": "purple"}]},
+      {"cells": ["Break-Even ROAS needed", "depends on margin", "1.18x min", "~2.2x at 45% margin"]}
+    ]
+  },
+  "platform_cards": [
+    {"name": "Meta Ads", "icon": "f", "icon_bg": "#1877f2", "spend": "Rs.3,46,075 spend", "metrics": [
+      {"label": "Reported ROAS", "value": "2.88x", "caption": "platform claim", "color": "red"},
+      {"label": "GST-Corrected", "value": "2.44x", "caption": "÷ 1.18 spend", "color": "amber"},
+      {"label": "GST Cost", "value": "Rs.62,294", "caption": "invisible", "color": "red"},
+      {"label": "Purchases", "value": "233", "caption": "platform reported", "color": "purple"},
+      {"label": "Impressions", "value": "3,65,346", "caption": "total reach", "color": "white"},
+      {"label": "Clicks", "value": "19,190", "caption": "all campaigns", "color": "white"}
+    ]},
+    {"name": "Google Ads", "icon": "G", "icon_bg": "#ea4335", "spend": "Rs.97,469 spend", "metrics": [
+      {"label": "Reported ROAS", "value": "3.55x", "caption": "platform claim", "color": "red"},
+      {"label": "GST-Corrected", "value": "3.01x", "caption": "÷ 1.18 spend", "color": "amber"},
+      {"label": "GST Cost", "value": "Rs.17,544", "caption": "invisible", "color": "red"},
+      {"label": "Conv. Value", "value": "Rs.3,45,665", "caption": "reported", "color": "green"},
+      {"label": "Impressions", "value": "5,45,767", "caption": "all campaigns", "color": "white"},
+      {"label": "Clicks", "value": "13,115", "caption": "all campaigns", "color": "white"}
+    ]}
+  ],
+  "campaign_table": {
+    "title": "Campaign-Level ROAS (Platform-Reported, GST-Corrected)",
+    "tag": "UTM 42% — NOT RETAINED ROAS",
+    "cols": ["Campaign", "Platform", "Spend", "GST-Adj Spend", "Reported Rev", "GST-Corr ROAS", "Status"],
+    "rows": [
+      {"campaign": "Brand Search | 13-06-26", "sub": "Google — Branded Intent", "platform": "Google", "spend": "Rs.5,450", "gst_adj_spend": "Rs.6,431", "reported_rev": "Rs.79,224", "gst_roas": "12.32x", "status": "Scale"},
+      {"campaign": "TOF | Other Brands Catalogue | 04-05-26", "sub": "Meta — Catalogue TOF", "platform": "Meta", "spend": "Rs.6,303", "gst_adj_spend": "Rs.7,437", "reported_rev": "Rs.25,473", "gst_roas": "3.42x", "status": "Scale"},
+      {"campaign": "TOF | CBO | Offer Campaign | 06-01-26", "sub": "Meta — Offer TOF", "platform": "Meta", "spend": "Rs.74,349", "gst_adj_spend": "Rs.87,732", "reported_rev": "Rs.2,43,043", "gst_roas": "2.77x", "status": "Hold"},
+      {"campaign": "TOF | ABO | Swimwear - Creative Testing | 27-04-26", "sub": "Meta — Swimwear Creative Test", "platform": "Meta", "spend": "Rs.30,074", "gst_adj_spend": "Rs.35,487", "reported_rev": "Rs.94,929", "gst_roas": "2.67x", "status": "Hold"},
+      {"campaign": "Pmax - Covera Swimwear - 26-05-26", "sub": "Google — PMax Swimwear", "platform": "Google", "spend": "Rs.85,675", "gst_adj_spend": "Rs.1,01,097", "reported_rev": "Rs.2,66,441", "gst_roas": "2.64x", "status": "Monitor"},
+      {"campaign": "MOF - Retargeting - 11/12/25", "sub": "Meta — Retargeting MOF", "platform": "Meta", "spend": "Rs.91,909", "gst_adj_spend": "Rs.1,08,452", "reported_rev": "Rs.2,67,824", "gst_roas": "2.47x", "status": "Monitor"},
+      {"campaign": "TOF - Catalogue Ads - 16-05-26", "sub": "Meta — Catalogue TOF", "platform": "Meta", "spend": "Rs.56,681", "gst_adj_spend": "Rs.66,883", "reported_rev": "Rs.1,63,242", "gst_roas": "2.44x", "status": "Monitor"},
+      {"campaign": "TOF | ABO | Covera Core | 17-06-26", "sub": "Meta — Core TOF", "platform": "Meta", "spend": "Rs.61,496", "gst_adj_spend": "Rs.72,565", "reported_rev": "Rs.1,67,146", "gst_roas": "2.30x", "status": "Monitor"},
+      {"campaign": "TOF | ABO | End of Season Sale | 17-06-26", "sub": "Meta — Sale TOF", "platform": "Meta", "spend": "Rs.11,667", "gst_adj_spend": "Rs.13,767", "reported_rev": "Rs.25,512", "gst_roas": "1.85x", "status": "Review"},
+      {"campaign": "TOF | CBO | Covera Loungewear | 03-06-26", "sub": "Meta — Loungewear TOF", "platform": "Meta", "spend": "Rs.10,762", "gst_adj_spend": "Rs.12,699", "reported_rev": "Rs.9,332", "gst_roas": "0.73x", "status": "Pause Now"},
+      {"campaign": "Pmax | Covera Loungewear | 15-07-25", "sub": "Google — PMax Loungewear", "platform": "Google", "spend": "Rs.6,344", "gst_adj_spend": "Rs.7,486", "reported_rev": "Rs.0", "gst_roas": "0.00x", "status": "Pause Now"}
+    ],
+    "total": {"campaign": "TOTAL (All Active)", "platform": "Meta + Google", "spend": "Rs.4,43,544", "gst_adj_spend": "Rs.5,23,382", "reported_rev": "Rs.13,42,166", "gst_roas": "2.56x GST-Corr", "status": "True: 1.84x"}
+  },
+  "breakeven": {
+    "cards": [
+      {"label": "Dashboard Break-Even", "value": "3.03x", "caption": "What platform shows as your ROAS", "color": "red"},
+      {"label": "Actual Break-Even ROAS", "value": "2.20x", "caption": "At 45% gross margin after COGS", "color": "amber"},
+      {"label": "Your True ROAS", "value": "1.84x", "caption": "Below break-even. Verify COGS urgently.", "color": "purple"}
+    ],
+    "critical": "🔴 **Critical:** Dashboard ROAS of 3.03x = your actual break-even. Real store ROAS of 1.84x is below break-even at standard fashion margins. Every rupee of spend may be reducing profitability. Verify your COGS immediately."
+  },
+  "order_health": {
+    "title": "Order Health — July 1–18, 2026",
+    "tiles": [
+      {"value": "85.3%", "label": "Fulfilled", "caption": "267 orders", "color": "green"},
+      {"value": "14.1%", "label": "Unfulfilled", "caption": "44 orders pending", "color": "amber"},
+      {"value": "13.7%", "label": "Return Rate", "caption": "Rs.1,61,847 lost", "color": "red"},
+      {"value": "Rs.3,770", "label": "Avg. Order Value", "caption": "313 total orders", "color": "purple"},
+      {"value": "42%", "label": "UTM Coverage", "caption": "Below 60% threshold", "color": "amber"}
+    ]
+  },
+  "chart": {
+    "title": "Daily Net Sales vs Ad Spend — July 1–18, 2026",
+    "notes": ["**Best Day** (Jul 10: Rs.1,01,677)", "**Partial Day** (Jul 18)"],
+    "days": [
+      {"day": "Jul 1", "net": 42000, "spend": 22000},
+      {"day": "Jul 2", "net": 38000, "spend": 20000},
+      {"day": "Jul 3", "net": 51000, "spend": 24000},
+      {"day": "Jul 4", "net": 47000, "spend": 23000},
+      {"day": "Jul 5", "net": 55000, "spend": 26000},
+      {"day": "Jul 6", "net": 40000, "spend": 21000},
+      {"day": "Jul 7", "net": 62000, "spend": 28000},
+      {"day": "Jul 8", "net": 58000, "spend": 27000},
+      {"day": "Jul 9", "net": 71000, "spend": 30000},
+      {"day": "Jul 10", "net": 101677, "spend": 34000},
+      {"day": "Jul 11", "net": 60000, "spend": 28000},
+      {"day": "Jul 12", "net": 49000, "spend": 24000},
+      {"day": "Jul 13", "net": 66000, "spend": 29000},
+      {"day": "Jul 14", "net": 53000, "spend": 25000},
+      {"day": "Jul 15", "net": 57000, "spend": 26000},
+      {"day": "Jul 16", "net": 44000, "spend": 22000},
+      {"day": "Jul 17", "net": 39000, "spend": 20000},
+      {"day": "Jul 18", "net": 22000, "spend": 12000}
+    ]
+  },
+  "actions": {
+    "title": "Highest-Impact Actions",
+    "subtitle": "5 Actions This Week · DO THESE IN ORDER",
+    "items": [
+      {"n": "1", "title": "Pause: Google PMax Loungewear — Rs.6,344 spend, Rs.0 revenue", "body": "Zero conversions recorded this month despite Rs.6,344 spend (Rs.7,486 incl. GST). Full waste with no signals to optimise. Pause immediately and redirect budget to PMax Swimwear (2.64x GST-corrected ROAS) or Brand Search (12.32x).", "impact": "Save Rs.7,486/month (incl. GST). Redirect to Brand Search or Swimwear PMax.", "impact_dir": "up"},
+      {"n": "2", "title": "Pause: Meta Loungewear TOF — 0.73x GST-corrected ROAS, losing Rs.3,367", "body": "Meta Loungewear TOF spent Rs.10,762 (Rs.12,699 incl. GST) and returned only Rs.9,332 — a net loss of Rs.3,367 on ad spend alone, before COGS. At 0.73x, every Rs.1 spent returns Rs.0.73. Pause and test new creative angles before relaunch.", "impact": "Current loss: Rs.3,367 this month. Stop bleeding immediately.", "impact_dir": "down"},
+      {"n": "3", "title": "Fix UTMs — 58% of orders are attribution-blind, blocking all real ROAS data", "body": "181 of 313 Shopify orders have no UTM parameters. At 42% coverage, every campaign ROAS in this report is platform-reported only — not confirmed against retained revenue. Fix UTM tags on all Meta and Google ad URLs within 48 hours. Once above 60%, True ROAS per campaign becomes calculable.", "impact": "Unlocks Rs.9,62,679 of attributable revenue for real optimisation decisions.", "impact_dir": "up"},
+      {"n": "4", "title": "Scale Brand Search (Google) — 12.32x GST-corrected ROAS on Rs.5,450 spend", "body": "Brand Search campaign returned Rs.79,224 on Rs.5,450 spend (Rs.6,431 incl. GST) — the highest ROAS in the account at 12.32x GST-corrected. Current spend is critically underfunded vs PMax Swimwear (Rs.85,675). Increase brand search budget to at least Rs.20,000/month and add branded negative keywords to all PMax campaigns to protect this traffic.", "impact": "Est. Rs.2,40,000 additional attributed revenue at current conversion rate.", "impact_dir": "up"},
+      {"n": "5", "title": "Set ROAS floor to 3.50x dashboard (not 2.9x) for all campaigns going forward", "body": "With 13.7% return rate and 18% GST invisible cost, a 3.03x dashboard ROAS actually equals break-even. To clear margin, campaigns need to show 3.5x+ on platform dashboards to generate a real 1.5x+ True ROAS. Update all campaign tROAS targets and bid caps accordingly.", "impact": "Aligns all automated bidding with actual profitability, not dashboard illusion.", "impact_dir": "up"}
+    ]
+  },
+  "footer": [
+    "Covera — True ROAS Money Flow Report  |  July 1–18, 2026  |  Generated by NQ Tracking Platform",
+    "Data sources: Meta Ads (act_1563572057756718, act_2017883648339248) · Google Ads (acc 2954447439, 1780146148) · Shopify Analytics (ShopifyQL)",
+    "UTM Coverage: 42% — campaign-level ROAS is platform-reported and GST-corrected. True retained ROAS (1.84x) is account-level only.",
+    "GST correction applies 18% to ad spend only. Revenue is Shopify net_sales (gross minus discounts and reversals). Margin estimates assume 45% gross margin; verify with your COGS actuals."
+  ]
+}

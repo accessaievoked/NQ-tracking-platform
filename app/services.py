@@ -3,11 +3,17 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
-from app.compute.money_flow import AdSpend, aggregate_orders, compute_money_flow
+from app.compute.money_flow import (
+    AdSpend,
+    aggregate_orders,
+    compute_money_flow,
+    compute_order_health,
+    daily_series,
+)
 from app.compute.tracking import compute_tracking_reality
 from app.config import settings
 from app.connectors.google_auth import (
@@ -27,7 +33,13 @@ from app.models import (
     ReportStatus,
     ReportType,
 )
-from app.reports.generator import generate_narrative, generate_tracking_narrative
+from app.reports.generator import (
+    generate_narrative,
+    generate_report_narrative,
+    generate_tracking_narrative,
+)
+from app.reports.compose import compose_facts
+from app.reports.specs import get_spec
 from app.security import decrypt, encrypt
 
 # Refresh a client-credentials token this many seconds before it actually expires.
@@ -121,7 +133,7 @@ def generate_money_flow_report(
     period_label = f"{period_start:%b %d} - {period_end:%b %d, %Y}"
     report = Report(
         brand_id=brand.id,
-        type=ReportType.money_flow,
+        type=ReportType.money_flow_report,
         status=ReportStatus.generating,
         title=f"{brand.name} - Money Flow Report | {period_label}",
         period_start=period_start,
@@ -152,6 +164,48 @@ def generate_money_flow_report(
         narrative = generate_narrative(brand.name, period_label, metrics)
 
         report.computed_metrics = metrics
+        report.narrative_md = narrative
+        report.status = ReportStatus.ready
+    except Exception as exc:  # keep the row, record the failure
+        report.status = ReportStatus.failed
+        report.error = str(exc)
+
+    db.commit()
+    db.refresh(report)
+    return report
+
+
+def generate_ai_report(
+    db: Session,
+    brand: Brand,
+    report_type: ReportType,
+    period_start: datetime,
+    period_end: datetime,
+    facts: dict,
+) -> Report:
+    """Generic pipeline for spec-backed report types.
+
+    The caller supplies a PRE-COMPUTED ``facts`` bundle (deterministic numbers);
+    this narrates it via the report's registered spec and persists the row. The
+    facts are stored verbatim in ``computed_metrics`` so a report can be
+    re-narrated later without recomputing.
+    """
+    spec = get_spec(report_type)  # raises for unknown types -> surfaced as 400 by API
+    period_label = f"{period_start:%b %d} - {period_end:%b %d, %Y}"
+    report = Report(
+        brand_id=brand.id,
+        type=report_type,
+        status=ReportStatus.generating,
+        title=f"{brand.name} - {spec.title} | {period_label}",
+        period_start=period_start,
+        period_end=period_end,
+    )
+    db.add(report)
+    db.flush()
+
+    try:
+        narrative = generate_report_narrative(report_type, brand.name, period_label, facts)
+        report.computed_metrics = facts
         report.narrative_md = narrative
         report.status = ReportStatus.ready
     except Exception as exc:  # keep the row, record the failure
@@ -268,3 +322,46 @@ def compute_tracking(
     label = f"{period_start:%b %d} - {period_end:%b %d, %Y}"
     narrative = generate_tracking_narrative(brand.name, label, metrics)
     return metrics, narrative
+
+
+def generate_report_from_data(db: Session, brand: Brand, report_type: ReportType, days: int = 30) -> dict:
+    """On-demand report for the Insights page: compute from the brand's live data
+    (Shopify orders + Meta ad spend), compose section facts, and narrate.
+
+    Returns {type, title, period, narrative_md, facts}. Money-flow report types
+    compose full section facts; others get the raw money_flow block (the AI
+    narrates what's available and flags what isn't connected)."""
+    spec = get_spec(report_type)  # raises for types without a spec -> 400 in the API
+    end = datetime.now(timezone.utc)
+    start = end - timedelta(days=days)
+    label = f"{start:%b %d} - {end:%b %d, %Y}"
+
+    connector = _shopify_connector(db, brand.id)
+    normalized = connector.normalize(connector.fetch(start, end))
+    orders = aggregate_orders(normalized)
+    ads = get_meta_ad_spend(db, brand.id, start, end)
+    money = compute_money_flow(orders, ads, gst_rate=settings.default_gst_rate)
+
+    facts = compose_facts(report_type, money)
+    if facts is None:
+        facts = {"currency": "INR", "money_flow": money}
+    facts["brand"] = brand.name
+    facts["period"] = label
+
+    # Order-health tiles + daily chart belong ONLY to the Money Flow report
+    # (its prompt has an ORDER HEALTH section). No other report gets them.
+    if report_type == ReportType.money_flow_report:
+        mo = money["money_out"]
+        facts["order_health"] = compute_order_health(orders)
+        facts["daily"] = daily_series(
+            normalized, mo.get("real_ad_cost"), bool(mo.get("ad_spend_connected"))
+        )
+
+    narrative = generate_report_narrative(report_type, brand.name, label, facts)
+    return {
+        "type": report_type.value,
+        "title": spec.title,
+        "period": label,
+        "narrative_md": narrative,
+        "facts": facts,
+    }

@@ -11,8 +11,18 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.config import settings
 from app.db import Base, get_db
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def _offline_llm(monkeypatch):
+    """Force the whole suite offline: with a real ANTHROPIC_API_KEY in the
+    environment, report-pipeline tests would otherwise make live Claude calls
+    (slow, flaky, and costly). Clearing the key routes every report through the
+    deterministic template instead. Restored automatically after each test."""
+    monkeypatch.setattr(settings, "anthropic_api_key", "", raising=False)
 
 
 @pytest.fixture()
@@ -44,8 +54,11 @@ def client(db_session):
 
 
 @pytest.fixture()
-def auth_client(client):
+def auth_client(client, db_session):
     """A TestClient carrying a valid session token (magic-link flow)."""
+    from app.auth import register_user
+
+    register_user(db_session, "owner@brand.com")  # login requires registration
     issued = client.post("/api/auth/magic-link", json={"email": "owner@brand.com"}).json()
     token = _token_from_url(issued["dev_login_url"])
     session = client.get(f"/api/auth/verify?token={token}").json()
