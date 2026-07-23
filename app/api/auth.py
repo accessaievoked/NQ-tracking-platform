@@ -22,8 +22,11 @@ def request_magic_link(body: MagicLinkRequest, db: Session = Depends(get_db)):
             status.HTTP_403_FORBIDDEN,
             "This email is not registered. Ask your administrator to add it.",
         )
-    # In local dev, hand back the URL directly (no email service required).
-    return MagicLinkIssued(sent=True, dev_login_url=login_url if settings.is_local else None)
+    # Hand back the URL directly when no email delivery is wired up (still
+    # gated by the allow-list check above — unregistered emails are rejected
+    # regardless of this setting).
+    expose = settings.is_local or settings.expose_magic_link_url
+    return MagicLinkIssued(sent=True, dev_login_url=login_url if expose else None)
 
 
 @router.get("/verify", response_model=SessionOut)
