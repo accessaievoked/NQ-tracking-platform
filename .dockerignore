@@ -14,7 +14,8 @@ htmlcov
 .git
 .gitignore
 
-frontend
+frontend/node_modules
+frontend/dist
 tests
 previews
 pgdata
