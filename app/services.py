@@ -79,6 +79,48 @@ def prepare_shopify_connection(config: dict, credentials: dict) -> tuple[dict, d
     return config, creds
 
 
+def prepare_ga4_connection(config: dict, credentials: dict) -> tuple[dict, dict]:
+    """Validate GA4 credentials and return (config, creds_to_store).
+
+    Two credential styles are accepted:
+      * Durable (recommended): client_id + client_secret + refresh_token
+            -> stored as {"oauth": {...}} and refreshed forever by the backend.
+      * Legacy/temporary: a raw access_token (e.g. OAuth Playground) that expires
+            in ~1 hour. Kept only as a fallback for quick tests.
+    Raises on any verification failure.
+    """
+    config = dict(config)
+    creds = dict(credentials)
+    prop = config.get("property_id")
+    if not prop:
+        raise ValueError("property_id is required in config")
+
+    cid, csec, rtok = (
+        creds.get("client_id"),
+        creds.get("client_secret"),
+        creds.get("refresh_token"),
+    )
+    if cid and csec and rtok:
+        token, _ = refresh_access_token(cid, csec, rtok)  # verify the trio works
+        creds_to_store = {
+            "oauth": {"client_id": cid, "client_secret": csec, "refresh_token": rtok}
+        }
+    elif creds.get("access_token"):
+        token = creds["access_token"]
+        creds_to_store = {"access_token": token}
+    else:
+        raise ValueError(
+            "Provide client_id+client_secret+refresh_token (durable) or "
+            "access_token (temporary)"
+        )
+
+    # Confirm the token can actually read the property.
+    GA4Connector(
+        credentials={"access_token": token}, config=config
+    ).verify_connection()
+    return config, creds_to_store
+
+
 def get_valid_shopify_token(db: Session, integ: Integration | None) -> str | None:
     """Return a usable access token, exchanging/refreshing Dev Dashboard creds
     as needed and persisting the cached token back to the integration."""

@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { api, setToken } from './api'
+import Logo from './Logo'
 
 export default function Login({ onLogin }) {
   const [email, setEmail] = useState('')
@@ -29,7 +30,7 @@ export default function Login({ onLogin }) {
   return (
     <div className="login-wrap">
       <div className="login-card">
-        <div className="logo">N Q</div>
+        <div className="login-logo"><Logo /></div>
         <h1>Sign in</h1>
         <p>Enter your email — in dev mode you're logged in directly.</p>
         <div className="pill-input">

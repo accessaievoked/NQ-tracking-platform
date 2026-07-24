@@ -4,6 +4,7 @@ import { PROVIDERS, COMING } from './providers'
 import Sidebar from './Sidebar'
 import ConnectDialog from './ConnectDialog'
 import Insights from './Insights'
+import BrandLogo from './BrandLogo'
 
 const PAGE_TITLES = { chats: 'Chats', workflows: 'Workflows' }
 
@@ -87,9 +88,8 @@ export default function Dashboard({ me, onLogout }) {
               const on = statusOf(p) === 'connected'
               return (
                 <div key={p} className={`cic ${on ? '' : 'off'}`}
-                  style={on ? { background: PROVIDERS[p].color } : {}}
                   title={PROVIDERS[p].name + (on ? ' (connected)' : '')}>
-                  {PROVIDERS[p].letter}
+                  <BrandLogo provider={p} size={22} fallback={PROVIDERS[p].letter} />
                 </div>
               )
             })}
@@ -143,7 +143,7 @@ export default function Dashboard({ me, onLogout }) {
                   return (
                     <div key={prov} className={`ic ${soon ? 'soon' : ''}`}>
                       <div className="top">
-                        <div className="cico" style={{ background: def.color }}>{def.letter}</div>
+                        <div className="cico"><BrandLogo provider={prov} size={24} fallback={def.letter} /></div>
                         <div>
                           <div className="nm">{def.name}</div>
                           <div className={`st ${soon ? 'no' : isConn ? 'ok' : isErr ? 'err' : 'no'}`}>

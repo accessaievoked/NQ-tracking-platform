@@ -18,7 +18,7 @@ from app.deps import get_owned_brand
 from app.models import Brand, Integration, IntegrationProvider, IntegrationStatus
 from app.schemas import IntegrationOut
 from app.security import encrypt
-from app.services import prepare_shopify_connection
+from app.services import prepare_ga4_connection, prepare_shopify_connection
 
 router = APIRouter(prefix="/api/brands/{brand_id}/integrations", tags=["integrations"])
 
@@ -57,6 +57,12 @@ def connect(
         except Exception as exc:
             status = IntegrationStatus.error
             error = f"Shopify verification failed: {exc}"
+    elif provider == IntegrationProvider.ga4 and body.credentials:
+        try:
+            config, creds_to_store = prepare_ga4_connection(config, body.credentials)
+        except Exception as exc:
+            status = IntegrationStatus.error
+            error = f"GA4 verification failed: {exc}"
 
     integ.config = config
     if creds_to_store:

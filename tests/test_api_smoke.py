@@ -47,11 +47,14 @@ def test_full_flow_create_brand_and_report(auth_client):
     assert got.json()["id"] == report["id"]
 
 
-def test_tenancy_isolation(auth_client):
+def test_tenancy_isolation(auth_client, db_session):
     """A brand id from one client must 404 for another client."""
+    from app.auth import register_user
+
     mine = auth_client.post("/api/brands", json={"name": "Mine"}).json()
 
-    # Second, separate user/client
+    # Second, separate user/client (login is allow-list gated -> register first)
+    register_user(db_session, "other@x.com")
     issued = auth_client.post("/api/auth/magic-link", json={"email": "other@x.com"}).json()
     token = issued["dev_login_url"].split("token=", 1)[1]
     session = auth_client.get(f"/api/auth/verify?token={token}").json()

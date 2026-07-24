@@ -4,11 +4,10 @@
 export const PROVIDERS = {
   shopify: {
     name: 'Shopify Store', color: '#95bf47', letter: 'S',
-    help: 'Dev Dashboard app credentials, or a legacy access token.',
+    oauth: true,
+    help: 'Enter your store domain and approve access on Shopify — no keys to paste.',
     fields: [
       { k: 'config.shop_domain', label: 'Shop domain (store.myshopify.com)' },
-      { k: 'credentials.client_id', label: 'API key / Client ID' },
-      { k: 'credentials.client_secret', label: 'API secret', secret: true },
     ],
   },
   meta_ads: {
@@ -21,10 +20,12 @@ export const PROVIDERS = {
   },
   ga4: {
     name: 'Google Analytics 4', color: '#e8710a', letter: 'G',
-    help: 'GA4 property id + an access token.',
+    help: 'Property id + OAuth client id/secret + refresh token. This connects permanently — the backend refreshes access tokens on its own, nothing to re-paste.',
     fields: [
       { k: 'config.property_id', label: 'Property ID' },
-      { k: 'credentials.access_token', label: 'Access token', secret: true },
+      { k: 'credentials.client_id', label: 'OAuth client ID' },
+      { k: 'credentials.client_secret', label: 'OAuth client secret', secret: true },
+      { k: 'credentials.refresh_token', label: 'Refresh token', secret: true },
     ],
   },
   clarity: {

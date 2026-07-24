@@ -1,4 +1,5 @@
 import React from 'react'
+import Logo from './Logo'
 
 const NAV = [
   { id: 'chats', icon: 'chat_bubble', label: 'Chats' },
@@ -12,7 +13,7 @@ export default function Sidebar({ page, setPage, me, onLogout }) {
   const initials = (displayName || 'NQ').slice(0, 2).toUpperCase()
   return (
     <aside className="sidebar">
-      <div className="side-logo"><span className="logo">N Q</span></div>
+      <div className="side-logo"><Logo /></div>
       <button className="newchat">
         <span className="ms">add</span><span className="lbl">Start a New Chat</span>
       </button>
