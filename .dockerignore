@@ -16,6 +16,9 @@ htmlcov
 
 frontend/node_modules
 frontend/dist
+# Local-only dev-server overrides (VITE_API_TARGET) — never ship them.
+frontend/.env.local
+frontend/*.local
 tests
 previews
 pgdata

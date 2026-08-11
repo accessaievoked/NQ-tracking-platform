@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.api import auth, brands, integrations, reports, shopify_oauth
+from app.api import analytics, auth, brands, integrations, reports, shopify_oauth
 from app.config import settings
 
 app = FastAPI(
@@ -20,6 +20,7 @@ app.include_router(brands.router)
 app.include_router(integrations.router)
 app.include_router(shopify_oauth.router)
 app.include_router(reports.router)
+app.include_router(analytics.router)
 
 
 @app.get("/health", tags=["meta"])
