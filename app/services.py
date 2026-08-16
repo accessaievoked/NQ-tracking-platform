@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import time
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -15,19 +16,27 @@ from app.compute.money_flow import (
     daily_series,
 )
 from app.compute.tracking import compute_tracking_reality
+from app.compute.funnel import (
+    EVENT_STEPS,
+    FUNNEL_EVENT_NAMES,
+    ITEM_METRICS,
+    build_table,
+    view_spec,
+)
 from app.config import settings
 from app.connectors.google_auth import (
     ANALYTICS_READONLY,
     mint_access_token,
     refresh_access_token,
 )
-from app.connectors.ga4 import GA4Connector
+from app.connectors.ga4 import GA4Connector, and_filters, in_list_filter
 from app.connectors.meta_ads import MetaAdsConnector
 from app.connectors.shopify import ShopifyConnector, exchange_client_credentials
 from app.models import (
     Brand,
     Integration,
     IntegrationProvider,
+    IntegrationStatus,
     RawPull,
     Report,
     ReportStatus,
@@ -406,4 +415,248 @@ def generate_report_from_data(db: Session, brand: Brand, report_type: ReportType
         "period": label,
         "narrative_md": narrative,
         "facts": facts,
+    }
+
+
+# --- Data Insights: GA4 funnel views --------------------------------------
+
+BASE_METRICS = ["totalUsers", "sessions", "engagementRate"]
+EVENT_METRICS = ["totalUsers", "eventCount"]
+ITEM_METRIC_NAMES = list(ITEM_METRICS) + ["itemRevenue"]
+
+# Dimensions the Data Insights page can filter on, mirroring the source report's
+# three filter controls (Page title / Source-Medium / Browser).
+FILTER_FIELDS = {
+    "page_title": "pageTitle",
+    "source_medium": "sessionSourceMedium",
+    "browser": "browser",
+    "operating_system": "operatingSystem",
+}
+
+
+def _integration(db: Session, brand_id: str, provider: IntegrationProvider) -> Integration | None:
+    return (
+        db.query(Integration)
+        .filter(Integration.brand_id == brand_id, Integration.provider == provider)
+        .first()
+    )
+
+
+def get_ga4_connector(db: Session, brand_id: str) -> GA4Connector | None:
+    """A GA4 connector with live credentials, or None when GA4 isn't connected.
+
+    Deliberately returns None rather than a sample-data connector: the Data
+    Insights page must not show invented numbers.
+    """
+    integ = _integration(db, brand_id, IntegrationProvider.ga4)
+    token = get_valid_ga4_token(db, integ)
+    if not integ or not token or not (integ.config or {}).get("property_id"):
+        return None
+    return GA4Connector(credentials={"access_token": token}, config=integ.config or {})
+
+
+def analytics_connection_status(db: Session, brand_id: str) -> dict:
+    """What the Data Insights page needs before it can render anything."""
+    out: dict[str, Any] = {}
+    for provider in (IntegrationProvider.ga4, IntegrationProvider.shopify):
+        integ = _integration(db, brand_id, provider)
+        out[provider.value] = {
+            "status": integ.status.value if integ else "not_connected",
+            "connected": bool(integ and integ.status == IntegrationStatus.connected),
+            "last_error": integ.last_error if integ else None,
+        }
+
+    ga4_integ = _integration(db, brand_id, IntegrationProvider.ga4)
+    out["ga4"]["property_id"] = (ga4_integ.config or {}).get("property_id") if ga4_integ else None
+    # Marked connected in the DB isn't enough — the token has to actually mint.
+    out["ga4"]["connected"] = out["ga4"]["connected"] and get_ga4_connector(db, brand_id) is not None
+    # GA4 is the funnel's data source; Shopify only enriches it, so it doesn't gate rendering.
+    out["can_render"] = out["ga4"]["connected"]
+    return out
+
+
+def list_dimension_values(
+    db: Session, brand_id: str, field: str, start: datetime, end: datetime, limit: int = 250
+) -> list[dict]:
+    """Values for a filter dropdown, biggest audience first."""
+    connector = get_ga4_connector(db, brand_id)
+    if connector is None:
+        return []
+    rows = connector.run_report(
+        dimensions=[field],
+        metrics=["totalUsers"],
+        start=start,
+        end=end,
+        order_bys=[{"metric": {"metricName": "totalUsers"}, "desc": True}],
+        limit=limit,
+    )
+    return [
+        {"value": r["dimensions"][0], "total_users": int(r["metrics"].get("totalUsers", 0))}
+        for r in rows
+        if r.get("dimensions")
+    ]
+
+
+def list_page_titles(
+    db: Session, brand_id: str, start: datetime, end: datetime, limit: int = 250
+) -> list[dict]:
+    return list_dimension_values(db, brand_id, "pageTitle", start, end, limit)
+
+
+def list_ga4_events(
+    db: Session, brand_id: str, start: datetime, end: datetime, limit: int = 300
+) -> list[dict]:
+    """Every event name the property actually sends, with user + event counts.
+
+    This is how the checkout micro-funnel (CAS / CAF / GCI / ASI / API) gets
+    pinned down: those are custom events, so read the real names here and set
+    them in app.compute.funnel.CUSTOM_STEP_EVENTS. ``mapped_to`` shows which
+    funnel step, if any, currently consumes each event.
+    """
+    connector = get_ga4_connector(db, brand_id)
+    if connector is None:
+        return []
+    rows = connector.run_report(
+        dimensions=["eventName"],
+        metrics=["totalUsers", "eventCount"],
+        start=start,
+        end=end,
+        order_bys=[{"metric": {"metricName": "eventCount"}, "desc": True}],
+        limit=limit,
+    )
+    out = []
+    for r in rows:
+        if not r.get("dimensions"):
+            continue
+        name = r["dimensions"][0]
+        out.append({
+            "event": name,
+            "total_users": int(r["metrics"].get("totalUsers", 0)),
+            "event_count": int(r["metrics"].get("eventCount", 0)),
+            "mapped_to": EVENT_STEPS.get(name, []),
+        })
+    return out
+
+
+def _build_tables(
+    connector: GA4Connector,
+    spec: dict,
+    start: datetime,
+    end: datetime,
+    dim_filter: dict | None,
+) -> list[dict]:
+    """Fetch and assemble every table for one view over one period.
+
+    GA4 queries are cached per (dimensions, source) for the call, so the four
+    Product Funnel tables cost two dimension pulls, not four.
+    """
+    event_filter = in_list_filter("eventName", FUNNEL_EVENT_NAMES)
+    cache: dict[tuple, tuple[list, list]] = {}
+    totals_cache: dict[str, list] = {}
+
+    def dimension_data(dimensions: list[str], source: str) -> tuple[list, list]:
+        key = (tuple(dimensions), source)
+        if key in cache:
+            return cache[key]
+        if source == "items":
+            # Item-scoped: one row per product, no eventName breakdown. The page
+            # filter is event-scoped and would drop purchases, so it is not applied.
+            rows = connector.run_report(
+                dimensions=dimensions,
+                metrics=ITEM_METRIC_NAMES,
+                start=start,
+                end=end,
+                order_bys=[{"metric": {"metricName": "itemsViewed"}, "desc": True}],
+                limit=5000,
+            )
+            cache[key] = (rows, [])
+            return cache[key]
+        events = connector.run_report(
+            dimensions=[*dimensions, "eventName"],
+            metrics=EVENT_METRICS,
+            start=start,
+            end=end,
+            dimension_filter=and_filters(event_filter, dim_filter),
+        )
+        base = connector.run_report(
+            dimensions=dimensions,
+            metrics=BASE_METRICS,
+            start=start,
+            end=end,
+            dimension_filter=dim_filter,
+        )
+        cache[key] = (events, base)
+        return cache[key]
+
+    def totals(source: str) -> list:
+        if source not in totals_cache:
+            if source == "items":
+                totals_cache[source] = connector.run_report(
+                    dimensions=[], metrics=ITEM_METRIC_NAMES, start=start, end=end
+                )
+            else:
+                totals_cache[source] = connector.run_report(
+                    dimensions=["eventName"],
+                    metrics=EVENT_METRICS,
+                    start=start,
+                    end=end,
+                    dimension_filter=and_filters(event_filter, dim_filter),
+                )
+        return totals_cache[source]
+
+    total_base_rows = connector.run_report(
+        dimensions=[], metrics=BASE_METRICS, start=start, end=end, dimension_filter=dim_filter,
+    )
+    total_base = total_base_rows[0]["metrics"] if total_base_rows else {}
+
+    tables = []
+    for table_spec in spec["tables"]:
+        source = table_spec.get("source", "events")
+        events, base = dimension_data(table_spec["dimensions"], source)
+        tables.append(build_table(table_spec, events, base, totals(source), total_base))
+    return tables
+
+
+def build_funnel_view(
+    db: Session,
+    brand_id: str,
+    view: str,
+    start: datetime,
+    end: datetime,
+    filters: dict[str, list[str]] | None = None,
+) -> dict:
+    """Fetch every table (and, for comparison views, the previous period)."""
+    spec = view_spec(view)
+    connector = get_ga4_connector(db, brand_id)
+    if connector is None:
+        raise RuntimeError("GA4 is not connected for this brand")
+
+    active = {k: v for k, v in (filters or {}).items() if v}
+    dim_filter = and_filters(*[
+        in_list_filter(FILTER_FIELDS[k], v) for k, v in active.items() if k in FILTER_FIELDS
+    ])
+
+    tables = _build_tables(connector, spec, start, end, dim_filter)
+
+    prev_tables: list[dict] = []
+    prev_period: dict | None = None
+    if spec.get("compare"):
+        # Same length, immediately before the selected range.
+        span = (end - start) + timedelta(days=1)
+        prev_end = start - timedelta(days=1)
+        prev_start = prev_end - span + timedelta(days=1)
+        prev_tables = _build_tables(connector, spec, prev_start, prev_end, dim_filter)
+        prev_period = {"start": prev_start.strftime("%Y-%m-%d"),
+                       "end": prev_end.strftime("%Y-%m-%d")}
+
+    return {
+        "view": view,
+        "label": spec["label"],
+        "blurb": spec["blurb"],
+        "period": {"start": start.strftime("%Y-%m-%d"), "end": end.strftime("%Y-%m-%d")},
+        "prev_period": prev_period,
+        "filters": active,
+        "tables": tables,
+        "prev_tables": prev_tables,
+        "charts": spec.get("charts", []),
     }

@@ -4,7 +4,7 @@ import { PROVIDERS, COMING } from './providers'
 import Sidebar from './Sidebar'
 import ConnectDialog from './ConnectDialog'
 import Insights from './Insights'
-import BrandLogo from './BrandLogo'
+import DataInsights from './DataInsights'
 
 const PAGE_TITLES = { chats: 'Chats', workflows: 'Workflows' }
 
@@ -203,6 +203,8 @@ export default function Dashboard({ me, onLogout }) {
           </>
         ) : page === 'insights' ? (
           <Insights brandId={brandId} />
+        ) : page === 'data' ? (
+          <DataInsights brandId={brandId} onGoToLibrary={() => setPage('library')} />
         ) : (
           <div className="stub">
             <h1 className="page">{PAGE_TITLES[page]}</h1>

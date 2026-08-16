@@ -79,6 +79,57 @@ class GA4Connector(Connector):
             raise RuntimeError(f"GA4 runReport failed ({resp.status_code}): {resp.text}")
         return {"source": "live", "report": resp.json()}
 
+    # --- Generic reporting -------------------------------------------------
+
+    def run_report(
+        self,
+        *,
+        dimensions: list[str],
+        metrics: list[str],
+        start: datetime | str,
+        end: datetime | str,
+        dimension_filter: dict[str, Any] | None = None,
+        order_bys: list[dict[str, Any]] | None = None,
+        limit: int = 100000,
+    ) -> list[dict[str, Any]]:
+        """Run an arbitrary GA4 report and return parsed rows.
+
+        Each row is ``{"dimensions": [...], "metrics": {name: float}}``. This is
+        the building block the funnel views compose: they all boil down to
+        "count users per funnel event, broken down by some dimension".
+
+        Raises if the property/token are missing — callers that need a
+        connected-only guarantee (the Data Insights page) rely on that rather
+        than silently receiving sample numbers.
+        """
+        prop = self.config.get("property_id")
+        token = self.credentials.get("access_token")
+        if not (prop and token):
+            raise RuntimeError("GA4 is not connected (property_id + access_token required)")
+
+        import httpx
+
+        body: dict[str, Any] = {
+            "dateRanges": [{"startDate": _date_str(start), "endDate": _date_str(end)}],
+            "dimensions": [{"name": d} for d in dimensions],
+            "metrics": [{"name": m} for m in metrics],
+            "limit": limit,
+        }
+        if dimension_filter:
+            body["dimensionFilter"] = dimension_filter
+        if order_bys:
+            body["orderBys"] = order_bys
+
+        resp = httpx.post(
+            f"{GA4_API}/properties/{prop}:runReport",
+            headers={"Authorization": f"Bearer {token}"},
+            json=body,
+            timeout=60,
+        )
+        if resp.status_code >= 400:
+            raise RuntimeError(f"GA4 runReport failed ({resp.status_code}): {resp.text}")
+        return parse_rows(resp.json())
+
     def summarize(self, payload: dict[str, Any]) -> dict[str, float]:
         report = payload.get("report", {})
         headers = [h.get("name") for h in report.get("metricHeaders", [])]
@@ -91,6 +142,49 @@ class GA4Connector(Connector):
 
     def normalize(self, payload: dict[str, Any]) -> Any:  # interface parity
         return self.summarize(payload)
+
+
+def _date_str(value: datetime | str) -> str:
+    """GA4 accepts YYYY-MM-DD or relative literals like '30daysAgo'/'today'."""
+    return value.strftime("%Y-%m-%d") if isinstance(value, datetime) else str(value)
+
+
+def parse_rows(report: dict[str, Any]) -> list[dict[str, Any]]:
+    """Flatten a runReport response into ``[{"dimensions": [...], "metrics": {...}}]``.
+
+    Pure function so the funnel compute can be unit-tested against canned API
+    payloads without touching the network.
+    """
+    dim_names = [h.get("name") for h in report.get("dimensionHeaders", [])]
+    met_names = [h.get("name") for h in report.get("metricHeaders", [])]
+    out: list[dict[str, Any]] = []
+    for row in report.get("rows", []) or []:
+        dims = [d.get("value", "") for d in row.get("dimensionValues", [])]
+        vals = row.get("metricValues", [])
+        mets: dict[str, float] = {}
+        for i, name in enumerate(met_names):
+            raw = vals[i].get("value", "0") if i < len(vals) else "0"
+            try:
+                mets[name] = float(raw)
+            except (TypeError, ValueError):
+                mets[name] = 0.0
+        out.append({"dimensions": dims, "metrics": mets, "keys": dict(zip(dim_names, dims))})
+    return out
+
+
+def in_list_filter(field: str, values: list[str]) -> dict[str, Any]:
+    """A GA4 ``dimensionFilter`` matching ``field`` against any of ``values``."""
+    return {"filter": {"fieldName": field, "inListFilter": {"values": list(values)}}}
+
+
+def and_filters(*filters: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Combine dimension filters with AND, ignoring ``None`` entries."""
+    active = [f for f in filters if f]
+    if not active:
+        return None
+    if len(active) == 1:
+        return active[0]
+    return {"andGroup": {"expressions": active}}
 
 
 def _sample_report() -> dict[str, Any]:

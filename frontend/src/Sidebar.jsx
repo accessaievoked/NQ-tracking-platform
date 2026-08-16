@@ -4,6 +4,7 @@ import Logo from './Logo'
 const NAV = [
   { id: 'chats', icon: 'chat_bubble', label: 'Chats' },
   { id: 'insights', icon: 'bar_chart', label: 'Insights & Reports' },
+  { id: 'data', icon: 'insights', label: 'Data Insights & Charts' },
   { id: 'workflows', icon: 'automation', label: 'Workflows' },
   { id: 'library', icon: 'storefront', label: 'Brand Library' },
 ]
