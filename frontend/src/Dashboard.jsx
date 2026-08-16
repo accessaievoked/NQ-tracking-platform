@@ -11,6 +11,32 @@ const PAGE_TITLES = { chats: 'Chats', workflows: 'Workflows' }
 export default function Dashboard({ me, onLogout }) {
   const [page, setPage] = useState('library')
   const [collapsed, setCollapsed] = useState(localStorage.getItem('nq_collapsed') === '1')
+  const [navOpen, setNavOpen] = useState(false)  // mobile drawer
+  const [sidebarW, setSidebarW] = useState(() => {
+    const v = parseInt(localStorage.getItem('nq_sw'), 10)
+    return v >= 240 && v <= 600 ? v : 300
+  })
+
+  function startResize(e) {
+    e.preventDefault()
+    const onMove = (ev) => {
+      const x = ev.touches ? ev.touches[0].clientX : ev.clientX
+      setSidebarW(Math.min(600, Math.max(240, x)))
+    }
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.removeEventListener('touchmove', onMove)
+      document.removeEventListener('touchend', onUp)
+      document.body.style.userSelect = ''
+      setSidebarW((w) => { localStorage.setItem('nq_sw', String(w)); return w })
+    }
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    document.addEventListener('touchmove', onMove, { passive: false })
+    document.addEventListener('touchend', onUp)
+  }
   const [brands, setBrands] = useState([])
   const [brandId, setBrandId] = useState(localStorage.getItem('nq_brand') || '')
   const [integrations, setIntegrations] = useState([])
@@ -66,16 +92,26 @@ export default function Dashboard({ me, onLogout }) {
   })
 
   return (
-    <div className={`app ${collapsed ? 'collapsed' : ''}`}>
+    <div className={`app ${collapsed ? 'collapsed' : ''} ${navOpen ? 'nav-open' : ''}`}
+      style={{ '--sw': collapsed ? '78px' : sidebarW + 'px' }}>
       <button className="side-toggle" onClick={toggleCollapsed}
         title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
         <span className="ms">{collapsed ? 'chevron_right' : 'chevron_left'}</span>
       </button>
 
-      <Sidebar page={page} setPage={setPage} me={me} onLogout={onLogout} />
+      <Sidebar page={page} setPage={setPage} me={me} onLogout={onLogout}
+        onNavigate={() => setNavOpen(false)} />
+      {!collapsed && (
+        <div className="resizer" onMouseDown={startResize} onTouchStart={startResize}
+          title="Drag to resize" />
+      )}
+      {navOpen && <div className="nav-backdrop" onClick={() => setNavOpen(false)} />}
 
       <main className="main">
         <div className="topbar">
+          <button className="hamburger" onClick={() => setNavOpen(true)} aria-label="Open menu">
+            <span className="ms">menu</span>
+          </button>
           <div className="brand-select">
             <select value={brandId}
               onChange={(e) => { setBrandId(e.target.value); localStorage.setItem('nq_brand', e.target.value) }}>
