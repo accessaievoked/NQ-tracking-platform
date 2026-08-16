@@ -30,7 +30,7 @@ def test_full_flow_create_brand_and_report(auth_client):
     r = auth_client.post(
         f"/api/brands/{brand_id}/reports",
         json={
-            "type": "money_flow",
+            "type": "money_flow_report",
             "period_start": "2026-07-01T00:00:00Z",
             "period_end": "2026-07-06T00:00:00Z",
         },

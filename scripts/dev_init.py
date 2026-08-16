@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import sys
 
-from app.auth import issue_magic_link
+from app.auth import issue_magic_link, register_user
 from app.db import SessionLocal, init_db
 
 
@@ -15,9 +15,10 @@ def main() -> None:
     email = sys.argv[1] if len(sys.argv) > 1 else "dev@example.com"
     init_db()
     with SessionLocal() as db:
+        register_user(db, email)  # registration is required before login
         url = issue_magic_link(db, email)
     print("Tables created.")
-    print(f"Login link for {email}:\n{url}")
+    print(f"Registered {email}. Login link:\n{url}")
 
 
 if __name__ == "__main__":

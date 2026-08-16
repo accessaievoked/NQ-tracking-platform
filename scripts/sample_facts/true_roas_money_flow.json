@@ -1,0 +1,35 @@
+{
+  "currency": "INR",
+  "period": "July 1-18, 2026",
+  "platforms": "All Platforms (Meta + Google)",
+  "headline": "You spent Rs.4,43,544 on ads. Rs.9,62,679 net revenue reached your store (net).",
+  "utm_coverage_check": {
+    "utm_coverage_pct": 42,
+    "orders_with_utm": 131,
+    "orders_total": 313,
+    "threshold_pct": 60,
+    "verdict": "Below 60% threshold — campaign-level ROAS is directional only; account-level True ROAS is reliable."
+  },
+  "the_roas_reality": [
+    {"metric": "Dashboard-Claimed ROAS", "value": "3.03x", "meaning": "What Meta + Google report, gross and pre-GST."},
+    {"metric": "GST-Corrected ROAS", "value": "2.56x", "meaning": "Platform revenue after adding 18% GST to ad cost."},
+    {"metric": "True Store ROAS", "value": "1.84x", "meaning": "Net Shopify revenue actually collected / ad cost incl. GST."}
+  ],
+  "the_money_story": {
+    "net_revenue_shopify": 962679,
+    "total_ad_spend_excl_gst": 443544,
+    "total_ad_cost_incl_gst": 523382,
+    "gross_sales": 1168611
+  },
+  "gap_callout": {
+    "roas_gap_x": 1.19,
+    "roas_gap_pct": 39.3,
+    "rs_gap": 33822,
+    "cause": "Rs.33,822 gap between ad claims and Shopify net is driven by returns, GST on ad spend, and ~20% unattributed / pending COD orders."
+  },
+  "money_in_order_reality_table": [
+    {"category": "Total Orders (placed)", "orders": 313, "amount": 1168611, "pct_of_gross": 100.0},
+    {"category": "Successfully Fulfilled", "orders": 258, "amount": 962679, "pct_of_gross": 82.4},
+    {"category": "Partially Fulfilled / Pending", "orders": 55, "amount": 205932, "pct_of_gross": 17.6}
+  ]
+}

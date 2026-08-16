@@ -1,0 +1,18 @@
+{
+  "currency": "INR",
+  "headline": "Campaign 'Summer Sale - Prospecting' CPA jumped 62% above its 30-day average in the last 24 hours.",
+  "metrics_block": [
+    {"metric": "CPA (Rs.)", "baseline_30d": 420, "current": 680, "deviation_pct": 62.0},
+    {"metric": "Spend (Rs.)", "baseline_30d": 18500, "current": 24200, "deviation_pct": 30.8},
+    {"metric": "Conversions", "baseline_30d": 44, "current": 36, "deviation_pct": -18.2},
+    {"metric": "CTR (%)", "baseline_30d": 1.8, "current": 1.1, "deviation_pct": -38.9}
+  ],
+  "trigger_condition": "CPA rose more than 50% above the trailing 30-day average (threshold: +50%).",
+  "likely_cause": "Audience fatigue: CTR fell 39% while frequency climbed to 4.2, indicating the prospecting audience has seen the creative too many times.",
+  "affected_entities": [
+    {"entity": "Summer Sale - Prospecting", "level": "campaign", "rs_wasted": 9360},
+    {"entity": "Lookalike 3% - Video A", "level": "ad_set", "rs_wasted": 5100},
+    {"entity": "Static - Discount 20%", "level": "ad", "rs_wasted": 2800}
+  ],
+  "recommended_action": "Pause 'Static - Discount 20%' and refresh the prospecting creative within 24h; expected saving Rs. 9,000-11,000 over the next 3 days if acted on now."
+}

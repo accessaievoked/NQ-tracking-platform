@@ -28,7 +28,11 @@ htmlcov/
 *.db
 pgdata/
 
+# Generated report previews
+previews/
+
 # IDE / OS
 .idea/
 .vscode/
 .DS_Store
+.preview/

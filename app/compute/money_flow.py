@@ -185,3 +185,57 @@ def compute_money_flow(
 
     return {"currency": "INR", "money_in": money_in, "money_out": money_out,
             "efficiency": efficiency}
+
+
+def compute_order_health(agg: OrderAggregate) -> dict[str, Any]:
+    """Order-health tiles: fulfilment, returns, AOV. UTM coverage needs a UTM
+    matcher (not connected yet), so it's withheld."""
+    total = agg.total_orders
+    fulfilled = agg.fulfilled_orders
+    unfulfilled = total - fulfilled
+    return {
+        "fulfilled_pct": _pct(fulfilled, total),
+        "fulfilled_orders": fulfilled,
+        "unfulfilled_pct": _pct(unfulfilled, total),
+        "unfulfilled_orders": unfulfilled,
+        "return_rate_pct": _pct(agg.returns_amount, agg.gross_sales),
+        "returns_amount": agg.returns_amount,
+        "aov": _round(agg.gross_sales / total) if total else 0.0,
+        "total_orders": total,
+        "utm_coverage_pct": None,  # withheld until UTM tracking is connected
+    }
+
+
+def daily_series(orders: list[dict[str, Any]], real_ad_cost: float | None = None,
+                 ad_connected: bool = False) -> list[dict[str, Any]]:
+    """Per-day net sales (collected cash) from normalized orders. Ad spend per
+    day is estimated by spreading the period's real ad cost evenly (labelled
+    'est.') when ads are connected, else withheld."""
+    from collections import defaultdict
+    from datetime import datetime as _dt
+
+    by_day: dict[str, float] = defaultdict(float)
+    for o in orders:
+        ca = o.get("created_at")
+        if not ca:
+            continue
+        fin = (o.get("financial_status") or "").lower()
+        if o.get("is_cancelled") or fin in _VOID_STATES:
+            continue
+        if fin in _PAID_STATES:
+            day = str(ca)[:10]
+            by_day[day] += float(o.get("total_price", 0) or 0) - float(o.get("total_refunded", 0) or 0)
+
+    days = sorted(by_day)
+    if not days:
+        return []
+    spend = _round(real_ad_cost / len(days)) if (ad_connected and real_ad_cost) else None
+    best = max(by_day.values())
+    out = []
+    for d in days:
+        try:
+            label = _dt.strptime(d, "%Y-%m-%d").strftime("%b %d")
+        except ValueError:
+            label = d
+        out.append({"label": label, "net": _round(by_day[d]), "spend": spend, "best": by_day[d] == best})
+    return out

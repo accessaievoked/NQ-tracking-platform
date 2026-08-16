@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     magic_link_ttl_minutes: int = 15
     session_ttl_hours: int = 168
     app_base_url: str = "http://localhost:8000"
+    # If true, /api/auth/magic-link returns the login URL directly in the
+    # response (instead of requiring it to be emailed/fetched separately).
+    # The allow-list check in issue_magic_link() still applies either way —
+    # this only skips the "click the emailed link" step for accounts that
+    # are already registered. Off by default in real deployments.
+    expose_magic_link_url: bool = False
 
     # LLM
     anthropic_api_key: str = ""

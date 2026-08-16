@@ -55,6 +55,7 @@ class IntegrationProvider(str, enum.Enum):
     google_ads = "google_ads"
     ga4 = "ga4"
     search_console = "search_console"
+    clarity = "clarity"
 
 
 class IntegrationStatus(str, enum.Enum):
@@ -64,10 +65,50 @@ class IntegrationStatus(str, enum.Enum):
 
 
 class ReportType(str, enum.Enum):
-    money_flow = "money_flow"
+    # --- Account & performance ---
     account_audit = "account_audit"
+    weekly_performance = "weekly_performance"
+    cpa_diagnosis = "cpa_diagnosis"
+    day_of_week = "day_of_week"
+
+    # --- Spend & budget ---
+    wasted_spend = "wasted_spend"
+    budget_reallocation = "budget_reallocation"
+    scaling_opportunities = "scaling_opportunities"
+    diminishing_returns = "diminishing_returns"
+
+    # --- Creative ---
+    creative_fatigue = "creative_fatigue"
+    ad_ranking = "ad_ranking"
+    messaging_angles = "messaging_angles"
+    creative_briefs = "creative_briefs"
+
+    # --- Audience & targeting ---
+    audience_analysis = "audience_analysis"
+    demographic_breakdown = "demographic_breakdown"
+    retargeting_audit = "retargeting_audit"
+    geographic_performance = "geographic_performance"
+    advantage_plus_readiness = "advantage_plus_readiness"
+    placement_analysis = "placement_analysis"
+
+    # --- Google-specific ---
+    search_terms_audit = "search_terms_audit"
+    shopping_pmax_products = "shopping_pmax_products"
+    impression_share = "impression_share"
+    keyword_opportunities = "keyword_opportunities"
+
+    # --- Cross-platform & planning ---
+    weekly_action_plan = "weekly_action_plan"
+    platform_comparison = "platform_comparison"
+    cross_platform_budget = "cross_platform_budget"
+    funnel_mapping = "funnel_mapping"
+
+    # --- Commerce / money ---
+    money_flow_report = "money_flow_report"
     product_pl = "product_pl"
-    performance = "performance"
+    reality_check = "reality_check"
+    cod_prepaid = "cod_prepaid"
+    customer_quality = "customer_quality"
 
 
 class ReportStatus(str, enum.Enum):

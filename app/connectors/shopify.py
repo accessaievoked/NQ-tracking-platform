@@ -100,6 +100,7 @@ class ShopifyConnector(Connector):
             out.append(
                 {
                     "order_id": str(o.get("id")),
+                    "created_at": o.get("created_at"),
                     "total_price": float(o.get("total_price", 0) or 0),
                     "total_discounts": float(o.get("total_discounts", 0) or 0),
                     "total_refunded": _refunded_amount(o),
@@ -185,16 +186,16 @@ def _next_link(link_header: str | None) -> str | None:  # pragma: no cover
 def _sample_orders() -> list[dict[str, Any]]:
     """Deterministic sample resembling a small Shopify export (with payment state)."""
     return [
-        {"id": 1, "total_price": "2499.00", "total_discounts": "100.00", "total_refunded": "0",
+        {"id": 1, "created_at": "2026-07-01T09:00:00Z", "total_price": "2499.00", "total_discounts": "100.00", "total_refunded": "0",
          "cancelled_at": None, "financial_status": "paid", "fulfillment_status": "fulfilled"},
-        {"id": 2, "total_price": "3999.00", "total_discounts": "0", "total_refunded": "0",
+        {"id": 2, "created_at": "2026-07-02T11:00:00Z", "total_price": "3999.00", "total_discounts": "0", "total_refunded": "0",
          "cancelled_at": None, "financial_status": "paid", "fulfillment_status": "fulfilled"},
-        {"id": 3, "total_price": "1799.00", "total_discounts": "200.00", "total_refunded": "500.00",
+        {"id": 3, "created_at": "2026-07-03T14:00:00Z", "total_price": "1799.00", "total_discounts": "200.00", "total_refunded": "500.00",
          "cancelled_at": None, "financial_status": "partially_refunded", "fulfillment_status": "fulfilled"},
-        {"id": 4, "total_price": "2999.00", "total_discounts": "0", "total_refunded": "0",
+        {"id": 4, "created_at": "2026-07-04T16:00:00Z", "total_price": "2999.00", "total_discounts": "0", "total_refunded": "0",
          "cancelled_at": None, "financial_status": "pending", "fulfillment_status": "partial"},
-        {"id": 5, "total_price": "4599.00", "total_discounts": "0", "total_refunded": "0",
-         "cancelled_at": "2026-07-03T10:00:00Z", "financial_status": "voided", "fulfillment_status": None},
-        {"id": 6, "total_price": "1299.00", "total_discounts": "50.00", "total_refunded": "0",
+        {"id": 5, "created_at": "2026-07-05T10:00:00Z", "total_price": "4599.00", "total_discounts": "0", "total_refunded": "0",
+         "cancelled_at": "2026-07-05T10:00:00Z", "financial_status": "voided", "fulfillment_status": None},
+        {"id": 6, "created_at": "2026-07-06T18:00:00Z", "total_price": "1299.00", "total_discounts": "50.00", "total_refunded": "0",
          "cancelled_at": None, "financial_status": "pending", "fulfillment_status": None},
     ]
