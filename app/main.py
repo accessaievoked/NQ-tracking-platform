@@ -6,7 +6,15 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.api import analytics, auth, brands, integrations, reports, shopify_oauth
+from app.api import (
+    analytics,
+    auth,
+    brands,
+    integrations,
+    live,
+    reports,
+    shopify_oauth,
+)
 from app.config import settings
 
 app = FastAPI(
@@ -21,6 +29,10 @@ app.include_router(integrations.router)
 app.include_router(shopify_oauth.router)
 app.include_router(reports.router)
 app.include_router(analytics.router)
+app.include_router(live.router)
+# Public, key-authenticated pixel ingest — deliberately outside the session-auth
+# brand routes above.
+app.include_router(live.ingest_router)
 
 
 @app.get("/health", tags=["meta"])

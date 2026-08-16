@@ -37,6 +37,15 @@ class Settings(BaseSettings):
     # Reports
     default_gst_rate: float = 0.18
 
+    # Live Journey graph (storefront pixel -> real-time visitor graph)
+    # How far back the dashboard may look. The UI offers 5 and 30 minutes.
+    live_window_minutes: int = 30
+    # How long rows survive before the ingest endpoint prunes them. Kept a
+    # little above the window so a request arriving late still lands in view.
+    live_retention_minutes: int = 90
+    # Largest batch a single pixel POST may carry.
+    live_max_batch: int = 50
+
     # Shopify OAuth (authorization-code flow for merchant stores)
     shopify_api_key: str = ""      # app client_id
     shopify_api_secret: str = ""   # app client_secret

@@ -16,9 +16,12 @@ from datetime import datetime
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     DateTime,
     Enum,
     ForeignKey,
+    Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -31,6 +34,10 @@ from app.db import Base
 
 # Postgres gets real JSONB; other engines (e.g. SQLite in tests) get JSON.
 JSONType = JSON().with_variant(JSONB, "postgresql")
+
+# SQLite only auto-increments a column typed exactly INTEGER (it aliases rowid),
+# so a BIGINT primary key never gets a value there. Postgres keeps the bigint.
+BigIntPK = BigInteger().with_variant(Integer, "sqlite")
 
 
 def _uuid() -> str:
@@ -157,6 +164,12 @@ class Brand(TimestampMixin, Base):
     website: Mapped[str | None] = mapped_column(String(300))
     industry: Mapped[str | None] = mapped_column(String(120))
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
+    # Public write-only key embedded in the storefront pixel. It identifies the
+    # brand on ingest so the pixel needs no session token (it runs in the
+    # shopper's browser, where nothing is secret). Rotatable from the UI.
+    live_ingest_key: Mapped[str | None] = mapped_column(
+        String(48), unique=True, index=True
+    )
 
     client: Mapped["Client"] = relationship(back_populates="brands")
     integrations: Mapped[list["Integration"]] = relationship(
@@ -226,6 +239,42 @@ class Metric(TimestampMixin, Base):
     metric_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     # Flexible key/value fact bag (spend, orders, revenue, etc.).
     data: Mapped[dict] = mapped_column(JSONType, nullable=False)
+
+
+class LiveEvent(Base):
+    """One storefront pixel hit, kept only for a short rolling window.
+
+    Deliberately *not* a TimestampMixin: this is the highest-write table in the
+    schema and ``ts`` (the event's own time) is the only time that matters, so
+    two extra timestamp columns per row would be pure overhead. For the same
+    reason the primary key is an identity bigint rather than the UUID string
+    used elsewhere — UUID PKs fragment the index badly under append-heavy load.
+
+    Rows older than ``settings.live_retention_minutes`` are pruned on ingest;
+    this table is a buffer, not a historical record.
+    """
+
+    __tablename__ = "live_events"
+    __table_args__ = (
+        # The only query this table serves: one brand, one time window.
+        Index("ix_live_events_brand_ts", "brand_id", "ts"),
+    )
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    brand_id: Mapped[str] = mapped_column(
+        ForeignKey("brands.id", ondelete="CASCADE"), nullable=False
+    )
+    # Shopify web-pixel clientId — the thread that makes journeys possible.
+    visitor_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    session_id: Mapped[str | None] = mapped_column(String(64))
+    # Populated only once a shopper logs in; enables cross-device stitching.
+    customer_id: Mapped[str | None] = mapped_column(String(64))
+    event_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Derived server-side (never trusted from the client) — see compute.live_journey.
+    stage: Mapped[str] = mapped_column(String(32), nullable=False)
+    channel: Mapped[str] = mapped_column(String(32), nullable=False)
+    path: Mapped[str | None] = mapped_column(String(512))
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class Report(TimestampMixin, Base):

@@ -110,6 +110,83 @@ alembic upgrade head
 - **Deploy:** Fly.io app + worker (scheduled reports) — not in this repo yet.
 ```
 
+## Live Journey (real-time visitor graph)
+
+A live replacement for GA4's Realtime overview, built as a **graph** rather than a
+list of counters: nodes are where visitors are right now, edges are the hops they
+actually made.
+
+GA4's Realtime API cannot do this. It exposes only `unifiedScreenName`,
+`eventName`, geo, `deviceCategory`, `platform`, `audienceName` and `minutesAgo` —
+**no user-level identifier**, so it can produce node counts but never edges.
+Stuffing an id into a user-scoped custom dimension doesn't rescue it either; GA4
+buckets high-cardinality dimensions into `(other)`. So this collects its own
+first-party events instead.
+
+```
+Shopify storefront + checkout
+  └─ custom pixel (all_standard_events)
+       └─ POST /api/live/{ingest_key}/events        (public, key-authenticated)
+            └─ live_events  (rolling window, pruned on ingest)
+                 └─ GET /api/brands/{id}/live/graph  (session auth + tenancy)
+                      └─ Live Journey page: flow / network / table
+```
+
+### Files
+
+| Path | Role |
+|---|---|
+| `app/compute/live_journey.py` | Deterministic compute: event→stage, referrer→channel, timelines→nodes+edges. No DB, no I/O — same contract as `money_flow`. |
+| `app/api/live.py` | Public keyed ingest + tenancy-scoped graph/status/pixel routes. |
+| `app/pixel.py` | The pixel, served pre-filled per brand so there is nothing to hand-edit. |
+| `frontend/src/LiveJourney.jsx` | The page: filter row, stat tiles, three views, setup state. |
+| `frontend/src/liveJourneyLayout.js` | Sankey + network geometry, hand-rolled SVG (the app ships no charting dependency). |
+| `scripts/mock_live_traffic.py` | Simulated storefront traffic for demos and load checks. |
+
+### Setup for a brand
+
+1. Open **Live Journey** in the app. With no events collected it shows the
+   install screen with a copy-paste pixel — this brand's ingest URL is already
+   baked in.
+2. Shopify admin → **Settings → Customer events → Add custom pixel**, paste,
+   **Save**, then **Connect**.
+3. Visitors appear within seconds.
+
+`POST /api/brands/{id}/live/pixel/rotate` issues a new key and immediately
+invalidates the old one (the storefront pixel must then be replaced).
+
+### Local demo without a store
+
+```bash
+python -m scripts.mock_live_traffic --brand <BRAND_ID> --token <SESSION_TOKEN>
+```
+
+### Design notes
+
+- **Why polling, not SSE.** `EventSource` can't send an `Authorization` header,
+  so streaming would mean putting the session token in a query string (and into
+  every access log) plus a long-lived connection per open tab. A 3s poll against
+  an indexed 30-minute window is cheaper and survives every proxy in the path.
+- **Why the layout is fixed, not force-directed.** A force simulation re-solves
+  on every refresh, so nodes jump around and a live graph becomes unreadable.
+  Positions come from funnel depth; only sizes change between ticks.
+- **Why `live_events` breaks the schema conventions.** No `TimestampMixin` and an
+  identity bigint PK instead of a UUID string: this is the highest-write table in
+  the schema, and random UUID keys fragment the index badly under append-heavy
+  load. It is a buffer, not a historical record.
+- **Aggregation is in Python, not SQL.** It keeps the compute layer pure and unit
+  tested, consistent with the rest of `app/compute/`. The window is bounded, so
+  the row count is bounded. Past roughly 50k events per window, move the edge
+  derivation into a Postgres `LAG(...) OVER (PARTITION BY visitor_id ORDER BY ts)`.
+
+### Before heavy production use
+
+- Rate-limit `/api/live/{key}/events` — it is openly writable by design, and a
+  leaked key lets anyone inflate one brand's numbers.
+- Pin the ingest CORS header to the shop domain if you'd rather not run `*`.
+- The window is deliberately amnesiac. If Live Journey data should inform
+  reports, roll it up into `metrics` on a schedule before it is pruned.
+
 ## Connecting a real merchant store (Shopify OAuth)
 
 Client stores aren't in your Dev Dashboard org, so the client-credentials grant
