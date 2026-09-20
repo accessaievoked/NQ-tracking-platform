@@ -1,4 +1,5 @@
 import React from 'react'
+import Logo from './Logo'
 
 const NAV = [
   { id: 'chats', icon: 'chat_bubble', label: 'Chats' },
@@ -9,12 +10,12 @@ const NAV = [
   { id: 'library', icon: 'storefront', label: 'Brand Library' },
 ]
 
-export default function Sidebar({ page, setPage, me, onLogout }) {
+export default function Sidebar({ page, setPage, me, onLogout, onNavigate }) {
   const displayName = me.name || (me.email || '').split('@')[0]
   const initials = (displayName || 'NQ').slice(0, 2).toUpperCase()
   return (
     <aside className="sidebar">
-      <div className="side-logo"><span className="logo">N Q</span></div>
+      <div className="side-logo"><Logo /></div>
       <button className="newchat">
         <span className="ms">add</span><span className="lbl">Start a New Chat</span>
       </button>
@@ -23,7 +24,7 @@ export default function Sidebar({ page, setPage, me, onLogout }) {
           <a
             key={n.id} href="#"
             className={page === n.id ? 'active' : ''}
-            onClick={(e) => { e.preventDefault(); setPage(n.id) }}
+            onClick={(e) => { e.preventDefault(); setPage(n.id); onNavigate && onNavigate() }}
           >
             <span className="ms">{n.icon}</span><span className="lbl">{n.label}</span>
           </a>

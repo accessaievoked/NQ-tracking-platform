@@ -29,6 +29,7 @@ from app.connectors.shopify_oauth import (
     is_valid_shop,
     verify_hmac,
 )
+from app.config import settings
 from app.db import get_db
 from app.deps import get_current_user
 from app.models import Brand, Integration, IntegrationProvider, IntegrationStatus, User
@@ -57,6 +58,27 @@ def install(
         salt=STATE_SALT,
     )
     return RedirectResponse(url=build_install_url(shop, state))
+
+
+@router.get("/install-url")
+def install_url(
+    brand_id: str,
+    shop: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return the Shopify authorize URL as JSON so the SPA can redirect the
+    browser to it (the /install redirect can't carry the bearer header)."""
+    if not is_valid_shop(shop):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid shop domain")
+    brand = db.get(Brand, brand_id)
+    if not brand or brand.client_id != user.client_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Brand not found")
+    state = make_token(
+        {"brand_id": brand.id, "shop": shop, "nonce": uuid.uuid4().hex},
+        salt=STATE_SALT,
+    )
+    return {"url": build_install_url(shop, state)}
 
 
 @router.get("/callback", response_class=HTMLResponse)
@@ -112,8 +134,4 @@ def callback(request: Request, db: Session = Depends(get_db)):
     integ.last_error = None
     db.commit()
 
-    shop_name = config.get("shop_name") or shop
-    return HTMLResponse(
-        f"<h2>Connected {shop_name} to {brand.name}.</h2>"
-        "<p>You can close this window and return to the app.</p>"
-    )
+    return RedirectResponse(url=f"{settings.app_base_url}/?connected=shopify")

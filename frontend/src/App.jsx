@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { api, getToken, clearAuth } from './api'
 import Login from './Login'
 import Dashboard from './Dashboard'
+import BackgroundGradient from './BackgroundGradient'
 
 export default function App() {
   // undefined = loading, null = logged out, object = current user
@@ -14,7 +15,12 @@ export default function App() {
       .catch(() => { clearAuth(); setMe(null) })
   }, [])
 
-  if (me === undefined) return <div className="loading">Loading…</div>
-  if (!me) return <Login onLogin={setMe} />
-  return <Dashboard me={me} onLogout={() => { clearAuth(); setMe(null) }} />
+  if (me === undefined) return <><BackgroundGradient /><div className="loading">Loading…</div></>
+  if (!me) return <><BackgroundGradient /><Login onLogin={setMe} /></>
+  return (
+    <>
+      <BackgroundGradient />
+      <Dashboard me={me} onLogout={() => { clearAuth(); setMe(null) }} />
+    </>
+  )
 }

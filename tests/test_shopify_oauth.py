@@ -82,9 +82,12 @@ def test_callback_happy_path(auth_client, monkeypatch):
     params = {"code": "authcode", "shop": shop, "state": state, "timestamp": "1700000000"}
     params["hmac"] = _sign(params)
 
-    r = auth_client.get("/api/integrations/shopify/callback", params=params)
-    assert r.status_code == 200, r.text
-    assert "Connected" in r.text
+    r = auth_client.get(
+        "/api/integrations/shopify/callback", params=params, follow_redirects=False
+    )
+    # On success the callback redirects the browser back into the app.
+    assert r.status_code in (302, 307), r.text
+    assert "connected=shopify" in r.headers["location"]
 
     # Integration is now connected for the brand.
     integs = auth_client.get(f"/api/brands/{brand_id}/integrations").json()

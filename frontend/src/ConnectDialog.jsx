@@ -9,6 +9,24 @@ export default function ConnectDialog({ prov, brandId, onClose, onDone }) {
   const [busy, setBusy] = useState(false)
 
   async function save() {
+    // OAuth providers (Shopify): no keys to paste — send the merchant to the
+    // provider's approval screen; the backend callback stores the token.
+    if (def.oauth) {
+      const shop = (vals['config.shop_domain'] || '').trim()
+      if (!shop) { setErr('Enter your shop domain (store.myshopify.com)'); return }
+      setBusy(true); setErr('')
+      try {
+        const r = await api(
+          `/api/integrations/${prov}/install-url?brand_id=${brandId}&shop=${encodeURIComponent(shop)}`
+        )
+        window.location.href = r.url  // -> Shopify approval, then back to the app
+      } catch (e) {
+        setErr(e.message); setBusy(false)
+      }
+      return
+    }
+
+    // Token/paste providers (Meta, GA4, Clarity).
     const config = {}, credentials = {}
     def.fields.forEach((f) => {
       const v = (vals[f.k] || '').trim()
@@ -47,7 +65,9 @@ export default function ConnectDialog({ prov, brandId, onClose, onDone }) {
         ))}
         <div className="dlg-actions">
           <button className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn" onClick={save} disabled={busy}>Connect</button>
+          <button className="btn" onClick={save} disabled={busy}>
+            {def.oauth ? 'Continue to Shopify' : 'Connect'}
+          </button>
         </div>
         <p className="err">{err}</p>
       </div>
