@@ -18,7 +18,21 @@ from app.deps import get_owned_brand
 from app.models import Brand, Integration, IntegrationProvider, IntegrationStatus
 from app.schemas import IntegrationOut
 from app.security import encrypt
-from app.services import prepare_ga4_connection, prepare_shopify_connection
+from app.services import (
+    prepare_ga4_connection,
+    prepare_google_ads_connection,
+    prepare_meta_connection,
+    prepare_shopify_connection,
+)
+
+# Providers that verify their credentials on connect, so a bad paste fails here
+# rather than silently producing an empty report a week later.
+VERIFIERS = {
+    IntegrationProvider.shopify: ("Shopify", prepare_shopify_connection),
+    IntegrationProvider.ga4: ("GA4", prepare_ga4_connection),
+    IntegrationProvider.meta_ads: ("Meta", prepare_meta_connection),
+    IntegrationProvider.google_ads: ("Google Ads", prepare_google_ads_connection),
+}
 
 router = APIRouter(prefix="/api/brands/{brand_id}/integrations", tags=["integrations"])
 
@@ -51,18 +65,13 @@ def connect(
     status = IntegrationStatus.connected
     error: str | None = None
 
-    if provider == IntegrationProvider.shopify and body.credentials:
+    if provider in VERIFIERS and body.credentials:
+        label, prepare = VERIFIERS[provider]
         try:
-            config, creds_to_store = prepare_shopify_connection(config, body.credentials)
+            config, creds_to_store = prepare(config, body.credentials)
         except Exception as exc:
             status = IntegrationStatus.error
-            error = f"Shopify verification failed: {exc}"
-    elif provider == IntegrationProvider.ga4 and body.credentials:
-        try:
-            config, creds_to_store = prepare_ga4_connection(config, body.credentials)
-        except Exception as exc:
-            status = IntegrationStatus.error
-            error = f"GA4 verification failed: {exc}"
+            error = f"{label} verification failed: {exc}"
 
     integ.config = config
     if creds_to_store:

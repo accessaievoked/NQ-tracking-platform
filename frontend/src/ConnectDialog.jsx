@@ -55,12 +55,26 @@ export default function ConnectDialog({ prov, brandId, onClose, onDone }) {
         <p className="help">{def.help}</p>
         {def.fields.map((f) => (
           <div className="field" key={f.k}>
-            <label>{f.label}</label>
-            <input
-              type={f.secret ? 'password' : 'text'} placeholder={f.label}
-              value={vals[f.k] || ''}
-              onChange={(e) => setVals({ ...vals, [f.k]: e.target.value })}
-            />
+            <label>
+              {f.label}
+              {f.optional && <span className="opt"> optional</span>}
+            </label>
+            {f.multiline ? (
+              // Pasted JSON keys are hundreds of characters over many lines,
+              // so they get a textarea rather than a masked single-line input.
+              <textarea
+                rows={5} placeholder={f.label} spellCheck={false}
+                value={vals[f.k] || ''}
+                onChange={(e) => setVals({ ...vals, [f.k]: e.target.value })}
+              />
+            ) : (
+              <input
+                type={f.secret ? 'password' : 'text'} placeholder={f.label}
+                value={vals[f.k] || ''}
+                onChange={(e) => setVals({ ...vals, [f.k]: e.target.value })}
+              />
+            )}
+            {f.hint && <p className="hint">{f.hint}</p>}
           </div>
         ))}
         <div className="dlg-actions">

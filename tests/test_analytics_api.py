@@ -5,7 +5,28 @@ data, so the route + service + compute wiring is exercised without the network.
 """
 from __future__ import annotations
 
+import pytest
+
 import app.services as services
+from app.connectors.ga4 import GA4Connector
+
+
+@pytest.fixture(autouse=True)
+def _offline_ga4_verify(monkeypatch):
+    """Keep /connect offline.
+
+    Connecting GA4 verifies the credentials against Google before marking the
+    integration connected. That is the right behaviour in production and the
+    wrong one in a test: with a stub token the call 403s, the integration is
+    stored as `error`, and every funnel route below answers 409 instead of
+    rendering. Stub only the network hop — the route, prepare_ga4_connection
+    and the credential storage all still run for real.
+    """
+    monkeypatch.setattr(
+        GA4Connector,
+        "verify_connection",
+        lambda self: {"property_id": self.config.get("property_id"), "name": "stub"},
+    )
 
 
 class StubGA4:

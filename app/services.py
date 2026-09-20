@@ -30,7 +30,8 @@ from app.connectors.google_auth import (
     refresh_access_token,
 )
 from app.connectors.ga4 import GA4Connector, and_filters, in_list_filter
-from app.connectors.meta_ads import MetaAdsConnector
+from app.connectors.google_ads import GoogleAdsConnector
+from app.connectors.meta_ads import MetaAdsConnector, exchange_long_lived_token
 from app.connectors.shopify import ShopifyConnector, exchange_client_credentials
 from app.models import (
     Brand,
@@ -88,11 +89,38 @@ def prepare_shopify_connection(config: dict, credentials: dict) -> tuple[dict, d
     return config, creds
 
 
+def _as_key_info(value: Any) -> dict | None:
+    """Accept a service-account key as a dict or as the pasted JSON text.
+
+    The onboarding guide has clients download a .json key file, so whatever the
+    UI collects is just as likely to arrive as a string as a parsed object.
+    """
+    if not value:
+        return None
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"service_account is not valid JSON: {exc}") from exc
+    if not isinstance(value, dict):
+        raise ValueError("service_account must be the downloaded JSON key")
+    missing = [k for k in ("client_email", "private_key") if not value.get(k)]
+    if missing:
+        raise ValueError(
+            f"service_account JSON is missing {', '.join(missing)} — make sure it "
+            "is the key file, not the service account details page"
+        )
+    return value
+
+
 def prepare_ga4_connection(config: dict, credentials: dict) -> tuple[dict, dict]:
     """Validate GA4 credentials and return (config, creds_to_store).
 
-    Two credential styles are accepted:
-      * Durable (recommended): client_id + client_secret + refresh_token
+    Three credential styles are accepted:
+      * Service account (what the client onboarding guide produces): the
+            downloaded JSON key, stored as {"service_account": {...}}. The
+            backend signs a JWT and mints its own tokens — nothing expires.
+      * Durable, keyless: client_id + client_secret + refresh_token
             -> stored as {"oauth": {...}} and refreshed forever by the backend.
       * Legacy/temporary: a raw access_token (e.g. OAuth Playground) that expires
             in ~1 hour. Kept only as a fallback for quick tests.
@@ -104,12 +132,18 @@ def prepare_ga4_connection(config: dict, credentials: dict) -> tuple[dict, dict]
     if not prop:
         raise ValueError("property_id is required in config")
 
+    service_account = _as_key_info(creds.get("service_account"))
     cid, csec, rtok = (
         creds.get("client_id"),
         creds.get("client_secret"),
         creds.get("refresh_token"),
     )
-    if cid and csec and rtok:
+    if service_account:
+        # Mint once here purely to prove the key works and the property has
+        # granted this service account Viewer.
+        token, _ = mint_access_token(service_account, ANALYTICS_READONLY)
+        creds_to_store = {"service_account": service_account}
+    elif cid and csec and rtok:
         token, _ = refresh_access_token(cid, csec, rtok)  # verify the trio works
         creds_to_store = {
             "oauth": {"client_id": cid, "client_secret": csec, "refresh_token": rtok}
@@ -119,14 +153,98 @@ def prepare_ga4_connection(config: dict, credentials: dict) -> tuple[dict, dict]
         creds_to_store = {"access_token": token}
     else:
         raise ValueError(
-            "Provide client_id+client_secret+refresh_token (durable) or "
-            "access_token (temporary)"
+            "Provide a service_account key, client_id+client_secret+refresh_token "
+            "(durable), or access_token (temporary)"
         )
 
     # Confirm the token can actually read the property.
     GA4Connector(
         credentials={"access_token": token}, config=config
     ).verify_connection()
+    return config, creds_to_store
+
+
+def prepare_meta_connection(config: dict, credentials: dict) -> tuple[dict, dict]:
+    """Validate Meta credentials and return (enriched_config, creds_to_store).
+
+    The onboarding guide has clients hand over an app id, an app secret, an
+    extended user token and an `act_` ad account id. We exchange the token once
+    here — which both proves the app credentials are right and starts the 60-day
+    clock from now rather than from whenever the client generated it — then
+    verify the token can actually read the ad account.
+    """
+    config = dict(config)
+    creds = dict(credentials)
+    account = config.get("ad_account_id")
+    if not account:
+        raise ValueError("ad_account_id is required in config")
+
+    token = creds.get("access_token")
+    if not token:
+        raise ValueError("access_token is required")
+
+    app_id, app_secret = creds.get("app_id"), creds.get("app_secret")
+    creds_to_store: dict[str, Any] = {"access_token": token}
+    if app_id and app_secret:
+        token, expires_in = exchange_long_lived_token(app_id, app_secret, token)
+        creds_to_store = {
+            "access_token": token,
+            "app_id": app_id,
+            "app_secret": app_secret,
+            "expires_at": time.time() + expires_in,
+        }
+
+    info = MetaAdsConnector(
+        credentials={"access_token": token}, config=config
+    ).verify_connection()
+    config.update({"account_name": info.get("name"), "currency": info.get("currency")})
+    return config, creds_to_store
+
+
+def prepare_google_ads_connection(config: dict, credentials: dict) -> tuple[dict, dict]:
+    """Validate Google Ads credentials and return (enriched_config, creds_to_store).
+
+    Wants the client's OAuth trio for the `adwords` scope, the manager account's
+    developer token, and the customer id to report on. When the account sits
+    under an MCC, login_customer_id is that manager's id.
+    """
+    config = dict(config)
+    creds = dict(credentials)
+    if not config.get("customer_id"):
+        raise ValueError("customer_id is required in config")
+
+    developer_token = creds.get("developer_token")
+    if not developer_token:
+        raise ValueError("developer_token is required")
+
+    cid, csec, rtok = (
+        creds.get("client_id"),
+        creds.get("client_secret"),
+        creds.get("refresh_token"),
+    )
+    if cid and csec and rtok:
+        token, _ = refresh_access_token(cid, csec, rtok)  # verify the trio works
+        creds_to_store = {
+            "oauth": {"client_id": cid, "client_secret": csec, "refresh_token": rtok},
+            "developer_token": developer_token,
+        }
+    elif creds.get("access_token"):
+        token = creds["access_token"]
+        creds_to_store = {
+            "access_token": token,
+            "developer_token": developer_token,
+        }
+    else:
+        raise ValueError(
+            "Provide client_id+client_secret+refresh_token (durable) or "
+            "access_token (temporary)"
+        )
+
+    info = GoogleAdsConnector(
+        credentials={"access_token": token, "developer_token": developer_token},
+        config=config,
+    ).verify_connection()
+    config.update({"account_name": info.get("name"), "currency": info.get("currency")})
     return config, creds_to_store
 
 
@@ -209,7 +327,7 @@ def generate_money_flow_report(
 
         orders = aggregate_orders(connector.normalize(payload))
 
-        ads = get_meta_ad_spend(db, brand.id, period_start, period_end)
+        ads = get_ad_spend(db, brand.id, period_start, period_end)
 
         metrics = compute_money_flow(orders, ads, gst_rate=settings.default_gst_rate)
         narrative = generate_narrative(brand.name, period_label, metrics)
@@ -286,8 +404,7 @@ def get_meta_ad_spend(
     if not integ or not integ.encrypted_tokens:
         return AdSpend(connected=False)
 
-    creds = json.loads(decrypt(integ.encrypted_tokens))
-    token = creds.get("access_token")
+    token = get_valid_meta_token(db, integ)
     if not token:
         return AdSpend(connected=False)
 
@@ -297,6 +414,62 @@ def get_meta_ad_spend(
         return connector.to_ad_spend(payload)
     except Exception:
         return AdSpend(connected=False)
+
+
+def get_google_ads_spend(
+    db: Session, brand_id: str, period_start: datetime, period_end: datetime
+) -> AdSpend:
+    """Return real Google Ads spend for the period, or an unconnected AdSpend."""
+    integ = _integration(db, brand_id, IntegrationProvider.google_ads)
+    if not integ or not integ.encrypted_tokens:
+        return AdSpend(connected=False)
+
+    token = get_valid_google_ads_token(db, integ)
+    developer_token = _google_ads_developer_token(integ)
+    if not (token and developer_token):
+        return AdSpend(connected=False)
+
+    connector = GoogleAdsConnector(
+        credentials={"access_token": token, "developer_token": developer_token},
+        config=integ.config or {},
+    )
+    try:
+        payload = connector.fetch(period_start, period_end)
+        return connector.to_ad_spend(payload)
+    except Exception:
+        return AdSpend(connected=False)
+
+
+def get_ad_spend(
+    db: Session, brand_id: str, period_start: datetime, period_end: datetime
+) -> AdSpend:
+    """Total ad spend across every connected ad platform.
+
+    Money Flow asks one question — "what did you actually pay to acquire this
+    revenue?" — so spend from Meta and Google Ads is summed into a single
+    AdSpend, with `by_platform` keeping the split for the report to break out.
+    `connected` is True when at least one platform answered: a brand running
+    Meta only should still get its ROAS, not a withheld one.
+    """
+    parts = [
+        get_meta_ad_spend(db, brand_id, period_start, period_end),
+        get_google_ads_spend(db, brand_id, period_start, period_end),
+    ]
+    live = [p for p in parts if p.connected]
+    if not live:
+        return AdSpend(connected=False)
+
+    by_platform: dict[str, float] = {}
+    for part in live:
+        for platform, amount in part.by_platform.items():
+            by_platform[platform] = round(by_platform.get(platform, 0.0) + amount, 2)
+
+    return AdSpend(
+        reported_spend=round(sum(p.reported_spend for p in live), 2),
+        reported_revenue=round(sum(p.reported_revenue for p in live), 2),
+        by_platform=by_platform,
+        connected=True,
+    )
 
 
 def get_valid_ga4_token(db: Session, integ: Integration | None) -> str | None:
@@ -337,6 +510,80 @@ def get_valid_ga4_token(db: Session, integ: Integration | None) -> str | None:
         return token
 
     return creds.get("access_token")
+
+
+def get_valid_meta_token(db: Session, integ: Integration | None) -> str | None:
+    """Return a usable Meta access token, re-extending it before it expires.
+
+    Meta has no refresh token: the durable-ish credential is a long-lived user
+    token that runs ~60 days and can be exchanged for a fresh 60 days while it
+    is still valid. When the app id + secret are stored we do exactly that on
+    the first call inside the buffer window, and persist the new token. Without
+    them there is nothing to renew with, so the stored token is served as-is
+    until it dies — which is why the connect tile asks for them.
+    """
+    if not integ or not integ.encrypted_tokens:
+        return None
+    creds = json.loads(decrypt(integ.encrypted_tokens))
+    token = creds.get("access_token")
+    if not token:
+        return None
+
+    app_id, app_secret = creds.get("app_id"), creds.get("app_secret")
+    if not (app_id and app_secret):
+        return token
+
+    now = time.time()
+    expires_at = creds.get("expires_at") or 0
+    if expires_at and expires_at > now + TOKEN_REFRESH_BUFFER:
+        return token
+
+    try:
+        fresh, expires_in = exchange_long_lived_token(app_id, app_secret, token)
+    except Exception:
+        # A failed renewal shouldn't take down a token that may still work.
+        return token
+
+    creds["access_token"] = fresh
+    creds["expires_at"] = now + expires_in
+    integ.encrypted_tokens = encrypt(json.dumps(creds))
+    db.commit()
+    return fresh
+
+
+def get_valid_google_ads_token(db: Session, integ: Integration | None) -> str | None:
+    """Return a usable Google Ads access token, refreshing on expiry.
+
+    Same keyless OAuth path as GA4 — the client's own client_id/secret plus a
+    refresh token for the `adwords` scope — so this never needs a human.
+    """
+    if not integ or not integ.encrypted_tokens:
+        return None
+    creds = json.loads(decrypt(integ.encrypted_tokens))
+
+    oauth = creds.get("oauth")
+    if not oauth:
+        return creds.get("access_token")
+
+    now = time.time()
+    cache = creds.get("_cache") or {}
+    if cache.get("token") and cache.get("expires_at", 0) > now + TOKEN_REFRESH_BUFFER:
+        return cache["token"]
+
+    token, expires_in = refresh_access_token(
+        oauth["client_id"], oauth["client_secret"], oauth["refresh_token"]
+    )
+    creds["_cache"] = {"token": token, "expires_at": now + expires_in}
+    integ.encrypted_tokens = encrypt(json.dumps(creds))
+    db.commit()
+    return token
+
+
+def _google_ads_developer_token(integ: Integration | None) -> str | None:
+    """The MCC's developer token, which every Ads API call must carry."""
+    if not integ or not integ.encrypted_tokens:
+        return None
+    return json.loads(decrypt(integ.encrypted_tokens)).get("developer_token")
 
 
 def get_ga4_summary(
@@ -390,7 +637,7 @@ def generate_report_from_data(db: Session, brand: Brand, report_type: ReportType
     connector = _shopify_connector(db, brand.id)
     normalized = connector.normalize(connector.fetch(start, end))
     orders = aggregate_orders(normalized)
-    ads = get_meta_ad_spend(db, brand.id, start, end)
+    ads = get_ad_spend(db, brand.id, start, end)
     money = compute_money_flow(orders, ads, gst_rate=settings.default_gst_rate)
 
     facts = compose_facts(report_type, money)

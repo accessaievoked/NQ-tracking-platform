@@ -8,8 +8,15 @@ them into the AdSpend shape the Money Flow compute expects.
                      (used for the platform's claimed ROAS)
 
 With no credentials it returns empty sample data so the pipeline stays offline-
-safe. Live auth uses a Meta access token + ad account id; full OAuth / App Review
-is the productionization step (a token can be stored directly for testing).
+safe. Live auth uses a Meta access token + ad account id.
+
+Token longevity is the awkward part of Meta. A token generated in the Graph API
+Explorer lasts about an hour; "Extend Access Token" in the Access Token Debugger
+turns it into a long-lived one lasting ~60 days. Nothing is permanent, so the
+app id + secret are stored alongside it and `exchange_long_lived_token` is
+re-run before expiry — a long-lived token re-exchanged while still valid comes
+back with a fresh 60-day window. That is what keeps a client connected without
+anyone re-pasting anything.
 """
 from __future__ import annotations
 
@@ -105,3 +112,43 @@ class MetaAdsConnector(Connector):
 def _normalize_account(account: str) -> str:
     account = str(account or "")
     return account if account.startswith("act_") else f"act_{account}"
+
+
+# --- token longevity ------------------------------------------------------
+
+# Meta's long-lived user tokens run ~60 days. Graph reports the remainder in
+# expires_in; when it omits it (some token types report 0 = "never"), assume the
+# standard window rather than treating the token as already dead.
+LONG_LIVED_TTL = 60 * 24 * 3600
+
+
+def exchange_long_lived_token(
+    app_id: str, app_secret: str, token: str
+) -> tuple[str, int]:
+    """Exchange a Meta token for a long-lived one. Returns (token, expires_in).
+
+    Works on both a fresh short-lived token and a still-valid long-lived one —
+    the latter is how a connection renews itself before the 60 days run out.
+    """
+    import httpx
+
+    resp = httpx.get(
+        f"https://graph.facebook.com/{GRAPH_VERSION}/oauth/access_token",
+        params={
+            "grant_type": "fb_exchange_token",
+            "client_id": app_id,
+            "client_secret": app_secret,
+            "fb_exchange_token": token,
+        },
+        timeout=20,
+    )
+    if resp.status_code >= 400:
+        raise RuntimeError(
+            f"Meta token exchange failed ({resp.status_code}): {resp.text}"
+        )
+    data = resp.json()
+    if not data.get("access_token"):
+        raise RuntimeError(f"Meta token exchange returned no token: {data}")
+    expires_in = int(data.get("expires_in") or 0) or LONG_LIVED_TTL
+    return data["access_token"], expires_in
+

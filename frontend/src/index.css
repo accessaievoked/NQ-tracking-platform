@@ -280,6 +280,14 @@ p.page-sub{color:var(--t70);font-size:14px;margin:0 0 22px;}
 .field{margin:10px 0;}
 .field label{display:block;font-size:12px;color:var(--t60);margin-bottom:6px;}
 .field input{width:100%;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px;outline:none;}
+.field textarea{width:100%;border:1px solid var(--border);border-radius:10px;padding:10px 12px;
+  font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.45;
+  outline:none;resize:vertical;min-height:96px;}
+.field input:focus,.field textarea:focus{border-color:var(--blue);}
+.field label .opt{color:var(--t40);font-weight:400;text-transform:none;}
+.field .hint{margin:6px 0 0;font-size:11px;color:var(--t60);line-height:1.4;}
+/* The dialog grows with the credential forms; keep it scrollable on short screens. */
+.dialog{max-height:88vh;overflow-y:auto;}
 .dlg-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;}
 
 /* ---------- Data Insights & Charts (GA4 funnel views) ---------- */
