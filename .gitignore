@@ -36,3 +36,6 @@ previews/
 .vscode/
 .DS_Store
 .preview/
+
+# Vite writes these next to vite.config.js on every build
+vite.config.js.timestamp-*.mjs
