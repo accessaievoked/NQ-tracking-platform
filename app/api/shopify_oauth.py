@@ -10,6 +10,10 @@ The install endpoint is authenticated (so we know which brand to attach the
 store to) and encodes the brand id into a signed `state`. The callback is
 public (Shopify calls it via browser redirect) and trusts the signed state
 plus Shopify's HMAC instead of a session.
+
+Each brand may install its own Shopify app (custom distribution is one store
+per app). The callback reads the brand from our signed state first, then checks
+Shopify's HMAC against *that* brand's app secret.
 """
 from __future__ import annotations
 
@@ -34,6 +38,7 @@ from app.db import get_db
 from app.deps import get_current_user
 from app.models import Brand, Integration, IntegrationProvider, IntegrationStatus, User
 from app.security import encrypt, make_token, read_token
+from app.services import shopify_app_for
 
 router = APIRouter(prefix="/api/integrations/shopify", tags=["shopify-oauth"])
 
@@ -53,11 +58,7 @@ def install(
     if not brand or brand.client_id != user.client_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Brand not found")
 
-    state = make_token(
-        {"brand_id": brand.id, "shop": shop, "nonce": uuid.uuid4().hex},
-        salt=STATE_SALT,
-    )
-    return RedirectResponse(url=build_install_url(shop, state))
+    return RedirectResponse(url=_install_url_for(brand, shop))
 
 
 @router.get("/install-url")
@@ -74,11 +75,19 @@ def install_url(
     brand = db.get(Brand, brand_id)
     if not brand or brand.client_id != user.client_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Brand not found")
+    return {"url": _install_url_for(brand, shop)}
+
+
+def _install_url_for(brand: Brand, shop: str) -> str:
+    try:
+        app = shopify_app_for(brand)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     state = make_token(
         {"brand_id": brand.id, "shop": shop, "nonce": uuid.uuid4().hex},
         salt=STATE_SALT,
     )
-    return {"url": build_install_url(shop, state)}
+    return build_install_url(shop, state, app)
 
 
 @router.get("/callback", response_class=HTMLResponse)
@@ -90,9 +99,9 @@ def callback(request: Request, db: Session = Depends(get_db)):
 
     if not is_valid_shop(shop):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid shop domain")
-    if not verify_hmac(params):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "HMAC verification failed")
 
+    # Our own signed state comes first: it names the brand, and the brand
+    # decides which app's secret Shopify signed this request with.
     data = read_token(state, salt=STATE_SALT, max_age_seconds=STATE_TTL_SECONDS)
     if not data or data.get("shop") != shop:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired state")
@@ -100,11 +109,19 @@ def callback(request: Request, db: Session = Depends(get_db)):
     brand = db.get(Brand, data["brand_id"])
     if not brand:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Brand not found")
+    try:
+        app = shopify_app_for(brand)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 
-    token_data = exchange_code_for_token(shop, code)  # {access_token, scope}
+    if not verify_hmac(params, app):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "HMAC verification failed")
 
-    # Enrich with shop metadata (best-effort).
-    config = {"shop_domain": shop}
+    token_data = exchange_code_for_token(shop, code, app)  # {access_token, scope}
+
+    # Enrich with shop metadata (best-effort). Record which app granted the
+    # token, so a mismatch is visible if a brand's app is ever changed.
+    config = {"shop_domain": shop, "app_client_id": app.client_id}
     try:
         info = ShopifyConnector(
             credentials={"access_token": token_data["access_token"]},

@@ -153,6 +153,23 @@ class User(TimestampMixin, Base):
     client: Mapped["Client"] = relationship(back_populates="users")
 
 
+class ShopifyApp(TimestampMixin, Base):
+    """A Shopify app (Dev Dashboard client id + secret) that brands install.
+
+    Registered with ``python -m scripts.register_shopify_app``. The secret is
+    encrypted with TOKEN_ENCRYPTION_KEY like every other stored credential.
+    """
+
+    __tablename__ = "shopify_apps"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    client_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    encrypted_client_secret: Mapped[str] = mapped_column(Text, nullable=False)
+
+    brands: Mapped[list["Brand"]] = relationship(back_populates="shopify_app")
+
+
 class Brand(TimestampMixin, Base):
     __tablename__ = "brands"
 
@@ -170,8 +187,15 @@ class Brand(TimestampMixin, Base):
     live_ingest_key: Mapped[str | None] = mapped_column(
         String(48), unique=True, index=True
     )
+    # Which Shopify app this brand's store installs. Custom-distribution apps
+    # are locked to one store, so each client store gets its own app; NULL
+    # means the default app configured in SHOPIFY_API_KEY / SHOPIFY_API_SECRET.
+    shopify_app_id: Mapped[str | None] = mapped_column(
+        ForeignKey("shopify_apps.id", ondelete="SET NULL"), index=True
+    )
 
     client: Mapped["Client"] = relationship(back_populates="brands")
+    shopify_app: Mapped["ShopifyApp | None"] = relationship(back_populates="brands")
     integrations: Mapped[list["Integration"]] = relationship(
         back_populates="brand", cascade="all, delete-orphan"
     )

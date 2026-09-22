@@ -33,6 +33,8 @@ from app.connectors.ga4 import GA4Connector, and_filters, in_list_filter
 from app.connectors.google_ads import GoogleAdsConnector
 from app.connectors.meta_ads import MetaAdsConnector, exchange_long_lived_token
 from app.connectors.shopify import ShopifyConnector, exchange_client_credentials
+from app.connectors.shopify_oauth import ShopifyAppCreds
+from app.connectors.shopify_oauth import default_app as default_shopify_app
 from app.models import (
     Brand,
     Integration,
@@ -57,6 +59,26 @@ TOKEN_REFRESH_BUFFER = 300
 
 
 # --- Shopify auth ---------------------------------------------------------
+
+def shopify_app_for(brand: Brand) -> ShopifyAppCreds:
+    """The Shopify app this brand installs: its own registered app, else the default.
+
+    Raises when neither exists, so a missing app fails at "Connect" with a clear
+    message instead of Shopify showing a generic invalid-link page.
+    """
+    if brand.shopify_app is not None:
+        return ShopifyAppCreds(
+            brand.shopify_app.client_id,
+            decrypt(brand.shopify_app.encrypted_client_secret),
+        )
+    app = default_shopify_app()
+    if not (app.client_id and app.client_secret):
+        raise ValueError(
+            "No Shopify app is set up for this brand. Register one with: "
+            "python -m scripts.register_shopify_app"
+        )
+    return app
+
 
 def prepare_shopify_connection(config: dict, credentials: dict) -> tuple[dict, dict]:
     """Validate credentials and return (enriched_config, creds_to_store).

@@ -72,7 +72,7 @@ def test_callback_happy_path(auth_client, monkeypatch):
     # Avoid real network in the callback.
     monkeypatch.setattr(
         "app.api.shopify_oauth.exchange_code_for_token",
-        lambda s, c: {"access_token": "shpat_live", "scope": "read_orders"},
+        lambda s, c, app=None: {"access_token": "shpat_live", "scope": "read_orders"},
     )
     monkeypatch.setattr(
         "app.connectors.shopify.ShopifyConnector.verify_connection",
