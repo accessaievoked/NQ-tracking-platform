@@ -44,6 +44,39 @@ router = APIRouter(prefix="/api/integrations/shopify", tags=["shopify-oauth"])
 
 
 
+
+# What a merchant sees if they open the app from their Shopify admin. The app
+# exists only so NQ can read orders; there is nothing to do inside Shopify, so
+# this is a static notice rather than the NQ login screen. Shopify appends
+# ?shop=&hmac=... when opening it; none of that is needed or trusted here.
+_APP_HOME = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Connected to NQ</title>
+<style>
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f6f8fb;
+       font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1c1c1c}
+  .card{background:#fff;border:1px solid #e9e9e9;border-radius:16px;padding:32px 36px;
+        max-width:440px;box-shadow:0 4px 24px rgba(3,35,94,.06)}
+  .mark{font-weight:700;letter-spacing:.35em;color:#03235e;font-size:20px}
+  h1{font-size:19px;margin:18px 0 8px;color:#03235e}
+  p{margin:0 0 10px;line-height:1.55;color:#4b5563;font-size:14px}
+  .ok{display:inline-block;margin-top:6px;font-size:13px;color:#388e3c;font-weight:600}
+</style></head>
+<body><div class="card">
+  <div class="mark">NQ</div>
+  <h1>This store is connected to NQ</h1>
+  <p>NQ reads your orders to build your reports. There is nothing to set up or
+     manage here in Shopify, and NQ never changes anything in your store.</p>
+  <p>Your reports live in your NQ dashboard.</p>
+  <span class="ok">&#10003; Read-only access</span>
+</div></body></html>"""
+
+
+@router.get("/app", response_class=HTMLResponse, include_in_schema=False)
+def app_home():
+    return HTMLResponse(_APP_HOME)
+
 @router.get("/install")
 def install(
     brand_id: str,

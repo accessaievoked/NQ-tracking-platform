@@ -226,3 +226,13 @@ def test_script_list(script, db_session, capsys):
     out = capsys.readouterr().out
     assert "Three Sixty Leather  ->  default app" in out
     assert "Indethnic  ->  NQ-tracker-Indethnic" in out
+
+
+# --- app home page shown inside Shopify admin ---------------------------------
+
+def test_app_home_is_a_public_static_notice_not_the_login(client):
+    """Merchants who open the app from Shopify see a notice, with no session needed."""
+    r = client.get("/api/integrations/shopify/app?shop=sitarey.myshopify.com&hmac=x")
+    assert r.status_code == 200
+    assert "connected to NQ" in r.text
+    assert "Sign in" not in r.text
