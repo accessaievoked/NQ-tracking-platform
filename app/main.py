@@ -16,6 +16,12 @@ from app.api import (
     shopify_oauth,
 )
 from app.config import settings
+from app.security import check_encryption_key
+
+# Refuse to boot with an unusable TOKEN_ENCRYPTION_KEY. On Fly this fails the
+# new release's health check, so the previous release keeps serving instead of
+# every stored credential becoming unreadable.
+check_encryption_key()
 
 app = FastAPI(
     title="NQ Tracking Platform API",
