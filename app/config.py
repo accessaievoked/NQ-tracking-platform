@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     app_env: str = "local"
     app_secret_key: str = "change-me-dev-secret-key-min-32-chars-long"
     token_encryption_key: str = ""  # Fernet key; if empty a dev key is derived
+    # Retired Fernet keys (comma-separated) still accepted for decryption, so
+    # the primary key can change without breaking stored credentials. See
+    # app/security.py and scripts/rotate_token_key.py.
+    token_encryption_key_previous: str = ""
 
     # Database
     database_url: str = "postgresql+psycopg://nq:nq@localhost:5432/nq"
