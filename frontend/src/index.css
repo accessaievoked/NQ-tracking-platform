@@ -288,6 +288,10 @@ p.page-sub{color:var(--t70);font-size:14px;margin:0 0 22px;}
 .field .hint{margin:6px 0 0;font-size:11px;color:var(--t60);line-height:1.4;}
 /* The dialog grows with the credential forms; keep it scrollable on short screens. */
 .dialog{max-height:88vh;overflow-y:auto;}
+/* Mobile nav drawer isn't built yet (no small-screen breakpoint), so the
+   hamburger that would open it is hidden. Re-enable inside a max-width
+   media query together with the drawer styles for .app.nav-open. */
+.hamburger,.nav-backdrop{display:none;}
 .dlg-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;}
 
 /* ---------- Data Insights & Charts (GA4 funnel views) ---------- */
