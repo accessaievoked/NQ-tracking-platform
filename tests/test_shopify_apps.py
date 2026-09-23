@@ -282,3 +282,22 @@ def test_script_rejects_a_secret_with_a_space(script, db_session, monkeypatch, c
     _plain_brand(db_session, "Sitarey")
     assert script.main(["--brand", "Sitarey", "--name", "A", "--client-id", "k" * 32]) == 2
     assert "contains a space" in capsys.readouterr().out
+
+
+def test_script_accepts_a_dev_dashboard_shpss_secret(script, db_session, monkeypatch):
+    """Dev Dashboard secrets look like shpss_ + 32 hex, not bare hex."""
+    from app.security import decrypt
+
+    monkeypatch.setenv("SHOPIFY_APP_SECRET", "shpss_" + "ab12" * 8)
+    brand = _plain_brand(db_session, "Sitarey")
+    assert script.main(["--brand", "Sitarey", "--name", "NQ-tracker-Sitarey",
+                        "--client-id", "831110d6947e6757c48a53c5e3f9fc32"]) == 0
+    db_session.refresh(brand)
+    assert decrypt(brand.shopify_app.encrypted_client_secret) == "shpss_" + "ab12" * 8
+
+
+def test_script_still_rejects_a_truncated_shpss_secret(script, db_session, monkeypatch, capsys):
+    monkeypatch.setenv("SHOPIFY_APP_SECRET", "shpss_ab12ab12")
+    _plain_brand(db_session, "Sitarey")
+    assert script.main(["--brand", "Sitarey", "--name", "A", "--client-id", "k" * 32]) == 2
+    assert "does not look like" in capsys.readouterr().out

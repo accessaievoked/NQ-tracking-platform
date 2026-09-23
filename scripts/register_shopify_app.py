@@ -14,8 +14,9 @@ shell history). Choose whichever of these suits you:
   * --secret-file F  — read it from a file you paste it into, then delete F
   * SHOPIFY_APP_SECRET in the environment
 
-Whatever you use, the script checks the secret looks like a Shopify one (32
-hex characters) and refuses the client ID by mistake.
+Whatever you use, the script checks the secret looks like a Shopify one — the
+current Dev Dashboard style, "shpss_" followed by 32 hex characters, or the
+older bare 32 hex characters — and refuses the client ID pasted by mistake.
 
 Usage:
     python -m scripts.register_shopify_app --list
@@ -39,7 +40,17 @@ from app.models import Brand, Integration, IntegrationProvider, IntegrationStatu
 from app.security import encrypt
 
 
-SECRET_LENGTH = 32
+HEX_LENGTH = 32
+SECRET_PREFIX = "shpss_"          # Dev Dashboard secrets; older ones are bare hex
+
+
+def _is_hex(value: str, length: int) -> bool:
+    return len(value) == length and all(c in "0123456789abcdefABCDEF" for c in value)
+
+
+def looks_like_secret(secret: str) -> bool:
+    body = secret[len(SECRET_PREFIX):] if secret.startswith(SECRET_PREFIX) else secret
+    return _is_hex(body, HEX_LENGTH)
 
 
 def read_secret(args) -> str | None:
@@ -72,14 +83,12 @@ def secret_problem(secret: str, client_id: str) -> str | None:
                 "separate value on the same page, usually behind a Reveal button.")
     if any(c.isspace() for c in secret):
         return "That secret contains a space — it looks like something else was copied."
-    looks_right = len(secret) == SECRET_LENGTH and all(
-        c in "0123456789abcdefABCDEF" for c in secret
-    )
-    if not looks_right:
+    if not looks_like_secret(secret):
         return (f"That does not look like a Shopify client secret: expected "
-                f"{SECRET_LENGTH} characters of 0-9 and a-f, got {len(secret)}. "
-                "Copy it again from the Dev Dashboard (app -> Settings), or use "
-                "--secret-file to paste it into a file first.")
+                f"'{SECRET_PREFIX}' plus {HEX_LENGTH} characters of 0-9 and a-f "
+                f"(or {HEX_LENGTH} such characters on their own), got {len(secret)} "
+                "characters. Copy it again from the Dev Dashboard (app -> "
+                "Settings), or use --secret-file to paste it into a file first.")
     return None
 
 
@@ -196,7 +205,7 @@ def main(argv: list[str]) -> int:
 
         print(f'{action} app "{app.name}" (client_id={app.client_id}) for brand {brand.name}.')
         if args.client_id:
-            print(f"Saved a {SECRET_LENGTH}-character client secret. If the connection still "
+            print(f"Saved a {len(secret)}-character client secret. If the connection still "
                   "fails, run scripts.check_shopify_callback on the failing URL.")
         if previous != app.id and _connected_shopify(db, brand):
             print("Note: this brand's store was connected through a different app. "
