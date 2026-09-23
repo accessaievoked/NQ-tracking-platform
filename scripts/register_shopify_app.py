@@ -7,7 +7,15 @@ button on the Shopify tile then uses it. Brands with no app use the default
 app from SHOPIFY_API_KEY / SHOPIFY_API_SECRET.
 
 The client secret is never taken on the command line (it would sit in your
-shell history). You are prompted for it, or it is read from SHOPIFY_APP_SECRET.
+shell history). Choose whichever of these suits you:
+
+  * default          — a hidden prompt (nothing appears as you paste)
+  * --show-secret    — a visible prompt, so you can see what you pasted
+  * --secret-file F  — read it from a file you paste it into, then delete F
+  * SHOPIFY_APP_SECRET in the environment
+
+Whatever you use, the script checks the secret looks like a Shopify one (32
+hex characters) and refuses the client ID by mistake.
 
 Usage:
     python -m scripts.register_shopify_app --list
@@ -24,10 +32,55 @@ import argparse
 import getpass
 import os
 import sys
+from pathlib import Path
 
 from app.db import SessionLocal
 from app.models import Brand, Integration, IntegrationProvider, IntegrationStatus, ShopifyApp
 from app.security import encrypt
+
+
+SECRET_LENGTH = 32
+
+
+def read_secret(args) -> str | None:
+    """The client secret, from --secret-file, the environment, or a prompt."""
+    if args.secret_file:
+        try:
+            secret = Path(args.secret_file).read_text(encoding="utf-8")
+        except OSError as exc:
+            print(f"Could not read {args.secret_file}: {exc}")
+            return None
+    elif os.environ.get("SHOPIFY_APP_SECRET"):
+        secret = os.environ["SHOPIFY_APP_SECRET"]
+    elif args.show_secret:
+        secret = input("Client secret (visible): ")
+    else:
+        secret = getpass.getpass("Client secret (hidden — paste and press Enter): ")
+
+    # Quotes and stray whitespace survive a paste surprisingly often.
+    secret = secret.strip().strip('"').strip("'").strip()
+    if not secret:
+        print("No client secret given — nothing saved.")
+        return None
+    return secret
+
+
+def secret_problem(secret: str, client_id: str) -> str | None:
+    """Catch the mistakes that only surface later as 'HMAC verification failed'."""
+    if secret == client_id:
+        return ("That is the client ID, not the client secret. The secret is the "
+                "separate value on the same page, usually behind a Reveal button.")
+    if any(c.isspace() for c in secret):
+        return "That secret contains a space — it looks like something else was copied."
+    looks_right = len(secret) == SECRET_LENGTH and all(
+        c in "0123456789abcdefABCDEF" for c in secret
+    )
+    if not looks_right:
+        return (f"That does not look like a Shopify client secret: expected "
+                f"{SECRET_LENGTH} characters of 0-9 and a-f, got {len(secret)}. "
+                "Copy it again from the Dev Dashboard (app -> Settings), or use "
+                "--secret-file to paste it into a file first.")
+    return None
 
 
 def find_brand(db, ref: str) -> Brand | None:
@@ -77,6 +130,9 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--name", help="a label for the app, e.g. NQ-tracker-Indethnic")
     parser.add_argument("--client-id", help="the app's Client ID from the Dev Dashboard")
     parser.add_argument("--use-default", action="store_true", help="point the brand back at the default app")
+    parser.add_argument("--show-secret", action="store_true",
+                        help="type/paste the secret visibly instead of hidden")
+    parser.add_argument("--secret-file", help="read the secret from this file instead of prompting")
     args = parser.parse_args(argv)
 
     with SessionLocal() as db:
@@ -110,12 +166,12 @@ def main(argv: list[str]) -> int:
                       f"Link it with: --brand \"{brand.name}\" --name \"{clash.name}\"")
                 return 2
 
-            secret = os.environ.get("SHOPIFY_APP_SECRET") or getpass.getpass(
-                "Client secret (input hidden): "
-            )
-            secret = secret.strip()
-            if not secret:
-                print("No client secret given — nothing saved.")
+            secret = read_secret(args)
+            if secret is None:
+                return 2
+            problem = secret_problem(secret, args.client_id.strip())
+            if problem:
+                print(problem)
                 return 2
 
             if app is None:
@@ -139,6 +195,9 @@ def main(argv: list[str]) -> int:
         db.commit()
 
         print(f'{action} app "{app.name}" (client_id={app.client_id}) for brand {brand.name}.')
+        if args.client_id:
+            print(f"Saved a {SECRET_LENGTH}-character client secret. If the connection still "
+                  "fails, run scripts.check_shopify_callback on the failing URL.")
         if previous != app.id and _connected_shopify(db, brand):
             print("Note: this brand's store was connected through a different app. "
                   "Disconnect and reconnect Shopify on its Brand Library page.")

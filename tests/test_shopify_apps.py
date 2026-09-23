@@ -159,7 +159,7 @@ def script(db_session, monkeypatch):
     from scripts import register_shopify_app as mod
 
     monkeypatch.setattr(mod, "SessionLocal", lambda: _Session(db_session))
-    monkeypatch.setenv("SHOPIFY_APP_SECRET", "typed-secret")
+    monkeypatch.setenv("SHOPIFY_APP_SECRET", "a1b2c3d4e5f60718293a4b5c6d7e8f90")   # a realistic 32-hex secret
     return mod
 
 
@@ -175,20 +175,20 @@ def test_script_registers_and_links_with_the_secret_encrypted(script, db_session
 
     brand = _plain_brand(db_session, "Indethnic")
     assert script.main(["--brand", "indethnic", "--name", "NQ-tracker-Indethnic",
-                        "--client-id", "abc123"]) == 0
+                        "--client-id", "abc123abc123abc123abc123abc12300"]) == 0
     db_session.refresh(brand)
     app = brand.shopify_app
-    assert app.client_id == "abc123"
-    assert app.encrypted_client_secret != "typed-secret"
-    assert decrypt(app.encrypted_client_secret) == "typed-secret"
+    assert app.client_id == "abc123abc123abc123abc123abc12300"
+    assert app.encrypted_client_secret != "a1b2c3d4e5f60718293a4b5c6d7e8f90"
+    assert decrypt(app.encrypted_client_secret) == "a1b2c3d4e5f60718293a4b5c6d7e8f90"
     out = capsys.readouterr().out
-    assert "typed-secret" not in out
+    assert "a1b2c3d4e5f60718293a4b5c6d7e8f90" not in out
 
 
 def test_script_links_an_already_registered_app(script, db_session):
     a = _plain_brand(db_session, "Indethnic")
     b = _plain_brand(db_session, "Indethnic Outlet")
-    script.main(["--brand", "Indethnic", "--name", "Shared", "--client-id", "k1"])
+    script.main(["--brand", "Indethnic", "--name", "Shared", "--client-id", "11111111111111111111111111111111"])
     assert script.main(["--brand", "Indethnic Outlet", "--name", "Shared"]) == 0
     db_session.refresh(a)
     db_session.refresh(b)
@@ -198,14 +198,14 @@ def test_script_links_an_already_registered_app(script, db_session):
 def test_script_refuses_a_duplicate_client_id_under_a_new_name(script, db_session, capsys):
     _plain_brand(db_session, "Indethnic")
     _plain_brand(db_session, "Sitarey")
-    script.main(["--brand", "Indethnic", "--name", "A", "--client-id", "same"])
-    assert script.main(["--brand", "Sitarey", "--name", "B", "--client-id", "same"]) == 2
+    script.main(["--brand", "Indethnic", "--name", "A", "--client-id", "22222222222222222222222222222222"])
+    assert script.main(["--brand", "Sitarey", "--name", "B", "--client-id", "22222222222222222222222222222222"]) == 2
     assert 'already registered as "A"' in capsys.readouterr().out
 
 
 def test_script_use_default_unlinks(script, db_session):
     brand = _plain_brand(db_session, "Indethnic")
-    script.main(["--brand", "Indethnic", "--name", "A", "--client-id", "k"])
+    script.main(["--brand", "Indethnic", "--name", "A", "--client-id", "33333333333333333333333333333333"])
     assert script.main(["--brand", "Indethnic", "--use-default"]) == 0
     db_session.refresh(brand)
     assert brand.shopify_app_id is None
@@ -213,14 +213,14 @@ def test_script_use_default_unlinks(script, db_session):
 
 def test_script_unknown_brand_lists_the_real_ones(script, db_session, capsys):
     _plain_brand(db_session, "Three Sixty Leather")
-    assert script.main(["--brand", "Nope", "--name", "A", "--client-id", "k"]) == 2
+    assert script.main(["--brand", "Nope", "--name", "A", "--client-id", "33333333333333333333333333333333"]) == 2
     assert "Three Sixty Leather" in capsys.readouterr().out
 
 
 def test_script_list(script, db_session, capsys):
     _plain_brand(db_session, "Three Sixty Leather")
     _plain_brand(db_session, "Indethnic")
-    script.main(["--brand", "Indethnic", "--name", "NQ-tracker-Indethnic", "--client-id", "k"])
+    script.main(["--brand", "Indethnic", "--name", "NQ-tracker-Indethnic", "--client-id", "33333333333333333333333333333333"])
     capsys.readouterr()
     assert script.main(["--list"]) == 0
     out = capsys.readouterr().out
@@ -236,3 +236,49 @@ def test_app_home_is_a_public_static_notice_not_the_login(client):
     assert r.status_code == 200
     assert "connected to NQ" in r.text
     assert "Sign in" not in r.text
+
+
+# --- secret input paths -------------------------------------------------------
+
+def test_script_reads_the_secret_from_a_file(script, db_session, monkeypatch, tmp_path):
+    from app.security import decrypt
+
+    monkeypatch.delenv("SHOPIFY_APP_SECRET")
+    f = tmp_path / "secret.txt"
+    f.write_text("  0123456789abcdef0123456789abcdef\n")   # trailing newline and spaces
+    brand = _plain_brand(db_session, "Sitarey")
+    assert script.main(["--brand", "Sitarey", "--name", "NQ-tracker-Sitarey",
+                        "--client-id", "831110d6947e6757c48a53c5e3f9fc32",
+                        "--secret-file", str(f)]) == 0
+    db_session.refresh(brand)
+    assert decrypt(brand.shopify_app.encrypted_client_secret) == "0123456789abcdef0123456789abcdef"
+
+
+def test_script_can_prompt_visibly(script, db_session, monkeypatch, capsys):
+    monkeypatch.delenv("SHOPIFY_APP_SECRET")
+    monkeypatch.setattr("builtins.input", lambda *a: "0123456789abcdef0123456789abcdef")
+    _plain_brand(db_session, "Sitarey")
+    assert script.main(["--brand", "Sitarey", "--name", "A", "--client-id", "k" * 32,
+                        "--show-secret"]) == 0
+
+
+def test_script_rejects_the_client_id_pasted_as_the_secret(script, db_session, monkeypatch, capsys):
+    monkeypatch.setenv("SHOPIFY_APP_SECRET", "831110d6947e6757c48a53c5e3f9fc32")
+    _plain_brand(db_session, "Sitarey")
+    assert script.main(["--brand", "Sitarey", "--name", "A",
+                        "--client-id", "831110d6947e6757c48a53c5e3f9fc32"]) == 2
+    assert "client ID, not the client secret" in capsys.readouterr().out
+
+
+def test_script_rejects_a_truncated_secret(script, db_session, monkeypatch, capsys):
+    monkeypatch.setenv("SHOPIFY_APP_SECRET", "0123456789abcdef")      # half of one
+    _plain_brand(db_session, "Sitarey")
+    assert script.main(["--brand", "Sitarey", "--name", "A", "--client-id", "k" * 32]) == 2
+    assert "does not look like a Shopify client secret" in capsys.readouterr().out
+
+
+def test_script_rejects_a_secret_with_a_space(script, db_session, monkeypatch, capsys):
+    monkeypatch.setenv("SHOPIFY_APP_SECRET", "0123456789abcdef 0123456789abcde")
+    _plain_brand(db_session, "Sitarey")
+    assert script.main(["--brand", "Sitarey", "--name", "A", "--client-id", "k" * 32]) == 2
+    assert "contains a space" in capsys.readouterr().out
